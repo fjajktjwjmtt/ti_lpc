@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //ti_lpc.h
-//v1.07			
+//v1.08			
 
 
 
@@ -153,6 +153,7 @@ void cb_bt_addr_hist_prev_next( Fl_Widget *w, void *v );
 void addr_add_history( int addr );
 void cb_bt_hex_byte_text_file( Fl_Widget *w, void *v );
 void cb_bt_tms_code_tables_text_file( Fl_Widget *w, void *v );
+extern bool select_au_file();
 
 
 

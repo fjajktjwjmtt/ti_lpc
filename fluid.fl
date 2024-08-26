@@ -44,7 +44,7 @@ Function {main_window()} {open
     Fl_Button {} {
       label Sel
       callback cb_bt_romfile_sel
-      tooltip {select a vsm rom, need to do this for both roms as they are paired} xywh {952 25 35 20} labelsize 11
+      tooltip {select a vsm rom, may need to do this twice, some roms came in pairs} xywh {952 25 35 20} labelsize 11
     }
     Fl_Button {} {
       label Play
@@ -77,8 +77,8 @@ Function {main_window()} {open
       class mytexteditor
     }
     Fl_Text_Editor te_wordlist {
-      label {Speak Spell's Rom Contents (UK/USA)}
-      tooltip {word lists read from both roms( only valid for speak & spell roms pairs), right click on an address on the left to render audio} xywh {5 196 240 180} labelsize 12 align 5
+      label {Speak Spell's Rom Contents (UK/USA)} selected
+      tooltip {word lists read from both roms (only valid for Speak & Spell rom pairs), right click on an address on the left to render audio} xywh {5 196 240 180} labelsize 12 align 5
       class mytexteditor2
     }
     Fl_Text_Editor te_chirp {
@@ -108,9 +108,9 @@ Function {main_window()} {open
     Fl_Value_Input fi_srate {
       label {pc srate:}
       callback cb_fi_srate
-      tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 textsize 11
+      tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set, you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 textsize 11
     }
-    Fl_Group fluid_gph1 {open selected
+    Fl_Group fluid_gph1 {open
       xywh {5 620 970 320}
     } {}
     Fl_Button {} {
@@ -141,7 +141,7 @@ Function {main_window()} {open
     Fl_Button {} {
       label Sel
       callback cb_bt_romfile1_sel
-      tooltip {select a vsm rom, need to do this for both roms as they are paired} xywh {952 46 35 20} labelsize 11
+      tooltip {select a vsm rom, may need to do this twice, some roms came in pairs} xywh {952 46 35 20} labelsize 11
     }
     Fl_Input fi_lpc_hex {
       label {lpc hex:}
@@ -161,7 +161,7 @@ Function {main_window()} {open
     Fl_Value_Input fi_srate_au {
       label {au srate:}
       callback cb_fi_srate_au
-      tooltip {sample rate to use when saving the .au audio file} xywh {718 96 65 20} labelsize 12 textsize 11
+      tooltip {sample rate to use when saving the .au audio file} xywh {725 96 58 19} labelsize 12 textsize 11
     }
     Fl_Value_Slider fvs_au_aud_gain {
       label {au file gain}
@@ -170,7 +170,7 @@ Function {main_window()} {open
     }
     Fl_Input fi_au_fname {
       label {au fname:}
-      tooltip {enter .au filename to save audio into} xywh {65 96 590 20} labelsize 11 when 1 textsize 11
+      tooltip {enter .au filename to save audio into} xywh {66 96 560 20} labelsize 11 when 1 textsize 11
     }
     Fl_Button {} {
       label tms5100
@@ -327,6 +327,11 @@ Function {main_window()} {open
       user_data 1
       callback cb_bt_tms_code_tables_text_file
       tooltip {save tms code table to text file} xywh {195 382 45 15} labelsize 9
+    }
+    Fl_Button {} {
+      label Sel
+      callback cb_bt_aufile_sel
+      tooltip {select .au audio file} xywh {628 96 35 20} labelsize 11
     }
   }
   code {tb_lpcdata = new Fl_Text_Buffer;
@@ -618,4 +623,9 @@ Function {cb_bt_addr_minus8(Fl_Widget*, void*)} {open
 modify_addr(-8);
 addr_add_history( last_say_offset );
 talk.say_repeat();} {}
+}
+
+Function {cb_bt_aufile_sel(Fl_Widget*, void*)} {open return_type void
+} {
+  code {select_au_file();} {}
 }

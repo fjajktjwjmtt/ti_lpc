@@ -28,9 +28,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //v1.04		22-jul-2023		//added namespace 'filter_code::'				
 //v1.05		18-sep-2023		//added 'create_filter_iir_using_q()'
+//v1.06		26-feb-2024		//remove include(s) of 'globals.h' 'mgraph.h'
+							//changed 'delete' to 'delete[]'
+							//added 'st_fir.verb'  'st_fir.suser0'  'st_fir.suser1'  'st_fir.user_id0'  'st_fir.user_id1'
+
+
 
 #include "filter_code.h"
-
 
 namespace filter_code
 	{
@@ -840,20 +844,90 @@ return 1;
 
 
 
+
+
+
+
+
+
+
+
+
+//just clears a created filter's bufs, make sure you set various 'st_fir' elements manually, this function does not alter 'st_fir'
+//MAKE SURE you set 'fir.bypass = 0', see 'create_filter_from_coeffs()' for example
+void fir_init( st_fir &fir )
+{
+if( fir.created == 0 ) return;
+
+fir.prev_idx = 0;
+
+for( int i = 0; i < fir.coeff_cnt; i++ ) fir.prev[ i ] = 0;
+}
+
+
+
+
+
+
+
+
+
+
+//not for user use
+void fir_init_internal_use( st_fir &fir )
+{
+if( fir.created == 0 ) return;
+
+fir.prev_idx = 0;
+
+for( int i = 0; i < fir.coeff_cnt; i++ ) fir.prev[ i ] = 0;
+}
+
+
+
+
+
+
+
+
+//EXAMPLE of HOW to set up 'st_fir' before 'filter_code::create_filter_from_coeffs()'
+
+//filter_code::st_fir fir00;
+//fir00.verb = 1;
+//fir00.suser0 = "fir00";
+//fir00.suser1 = "in function xxxx";
+//fir00.user_id0 = 0;
+//fir00.user_id1 = 0;
+//fir00.bypass = 0;
+//fir00.created = 0;
+
+
 //build an fir filter from a string loaded with coeffs, allocates memory so it must be deleted
+//see ABOVE for example usage
 bool create_filter_from_coeffs( st_fir &fir, vector<double> &vcoeff )
 {
+bool vb = fir.verb;														//v1.06
+
 
 if( fir.created ) delete_filter( fir );
 
-if( vcoeff.size() == 0 ) return 0;
+if( vcoeff.size() == 0 )
+	{
+	if(vb)printf( "create_filter_from_coeffs() - filter not created, size requested was zero, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
+	
+	return 0;
+	}
+
+
+if(vb) printf( "create_filter_from_coeffs() - alloc 2 filter bufs, size each %d, '%s' '%s'\n", (int)vcoeff.size(), fir.suser0.c_str(), fir.suser1.c_str() );	
 
 fir.coeff_ptr = new double [ vcoeff.size() ];				//alloc space
 fir.prev = new double [ vcoeff.size() ];
 
+if(vb) printf( "create_filter_from_coeffs() - about to load filter coeffs, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
 
-for( int i = 0; i < vcoeff.size(); i++ )				//load coeffs
+for( int i = 0; i < vcoeff.size(); i++ )					//load coeffs
 	{
 	fir.coeff_ptr[ i ] = vcoeff[ i ];
 	}
@@ -862,7 +936,10 @@ fir.coeff_cnt = vcoeff.size();
 fir.created = 1;
 //fir.bypass = 0;
 
-fir_init( fir );									//clear fir buf
+fir_init_internal_use( fir );											//clear fir buf
+
+if(vb) printf( "create_filter_from_coeffs() - filter created, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
+if(vb) if( fir.bypass ) printf( "create_filter_from_coeffs() - filter is in BYPASS, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
 return 1;
 }
@@ -876,13 +953,26 @@ return 1;
 //delete filter and free any memory allocated
 void delete_filter( st_fir &fir )
 {
-if ( fir.created == 0 ) return;
+bool vb = fir.verb;														//v1.06
+
+
+if ( fir.created == 0 ) 
+	{
+	if(vb)printf( "delete_filter() - can't delete filter, it's not created, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
+	return;
+	}
+
+if(vb)printf( "delete_filter() - about to delete filter, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
 fir.created = 0;
 
-delete fir.coeff_ptr;
-delete fir.prev;
+if(vb)printf( "delete_filter() - deleted filter, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
+delete[] fir.coeff_ptr;													//v1.06
+delete[] fir.prev;
+
+fir.coeff_ptr = 0;
+fir.prev = 0;
 }
 
 
@@ -894,18 +984,6 @@ delete fir.prev;
 
 
 
-
-
-
-
-void fir_init( st_fir &fir )
-{
-if( fir.created == 0 ) return;
-
-fir.prev_idx = 0;
-
-for( int i = 0; i < fir.coeff_cnt; i++ ) fir.prev[ i ] = 0;
-}
 
 
 
@@ -1179,12 +1257,15 @@ return 1;
 
 
 //build an fir filter from file, allocates memory so it must be deleted
+//MAKE SURE you set 'fir.bypass = 0', see 'create_filter_from_coeffs()' for example
 bool create_filter_from_file( st_fir &fir, string fname )
 {
 mystr m1, m2;
 string s1;
 double dd;
 vector<double> vd;
+
+bool vb = fir.verb;														//v1.06
 
 if( fir.created ) delete_filter( fir );
 
@@ -1227,7 +1308,7 @@ if( vd.size() == 0 )
 	}
 
 
-printf( "create_filter_from_file() - %d filter coeffs read from: '%s'\n", (int)vd.size(), fname.c_str()  );
+if(vb)printf( "create_filter_from_file() - %d filter coeffs read from: '%s'\n", (int)vd.size(), fname.c_str()  );
 
 if( vd.size() >=  10000 )
 	{
@@ -1251,7 +1332,7 @@ fir.coeff_cnt = vd.size();
 fir.created = 1;
 //fir.bypass = 0;
 
-fir_init( fir );									//clear fir buf
+fir_init_internal_use( fir );									//clear fir buf
 
 return 1;
 }
@@ -1269,12 +1350,15 @@ return 1;
 
 //build a filter from a string loaded with coeffs, allocates memory so it must be deleted
 // coeff should be seperated by cr\lf
+//MAKE SURE you set 'fir.bypass = 0', see 'create_filter_from_coeffs()' for example
 bool create_filter_from_string( st_fir &fir, string scoeff )
 {
 mystr m1, m2;
 string s1;
 double dd;
 vector<double> vd;
+
+bool vb = fir.verb;														//v1.06
 
 if( fir.created ) delete_filter( fir );
 
@@ -1313,7 +1397,7 @@ if( vd.size() == 0 )
 	}
 
 
-printf( "create_filter_from_string() - %d filter coeffs read\n", vd.size() );
+if(vb)printf( "create_filter_from_string() - %d filter coeffs read\n", vd.size() );
 
 if( vd.size() >=  10000 )
 	{
@@ -1337,7 +1421,7 @@ fir.coeff_cnt = vd.size();
 fir.created = 1;
 //fir.bypass = 0;
 
-fir_init( fir );									//clear fir buf
+fir_init_internal_use( fir );									//clear fir buf
 
 return 1;
 }

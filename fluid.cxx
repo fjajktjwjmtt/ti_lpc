@@ -71,7 +71,7 @@ Fl_Double_Window* main_window() {
     { meMain = new Fl_Menu_Bar(0, 0, 990, 20);
     } // Fl_Menu_Bar* meMain
     { Fl_Button* o = new Fl_Button(952, 25, 35, 20, "Sel");
-      o->tooltip("select a vsm rom, need to do this for both roms as they are paired");
+      o->tooltip("select a vsm rom, may need to do this twice, some roms came in pairs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_romfile_sel);
     } // Fl_Button* o
@@ -128,8 +128,8 @@ io");
       te_lpcdata->when(FL_WHEN_RELEASE);
     } // mytexteditor* te_lpcdata
     { te_wordlist = new mytexteditor2(5, 196, 240, 180, "Speak Spell\'s Rom Contents (UK/USA)");
-      te_wordlist->tooltip("word lists read from both roms( only valid for speak & spell roms pairs), rig\
-ht click on an address on the left to render audio");
+      te_wordlist->tooltip("word lists read from both roms (only valid for Speak & Spell rom pairs), righ\
+t click on an address on the left to render audio");
       te_wordlist->box(FL_DOWN_FRAME);
       te_wordlist->color(FL_BACKGROUND2_COLOR);
       te_wordlist->selection_color(FL_SELECTION_COLOR);
@@ -175,7 +175,7 @@ n buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx\
     } // Fl_Check_Button* ck_filter
     { fi_srate = new Fl_Value_Input(445, 72, 65, 20, "pc srate:");
       fi_srate->tooltip("set this to match the current samplerate of pc\'s audio hardware, if incorrec\
-tly set you will get pitch and duration errors (chipmunk/slomo)");
+tly set, you will get pitch and duration errors (chipmunk/slomo)");
       fi_srate->labelsize(11);
       fi_srate->textsize(11);
       fi_srate->callback((Fl_Callback*)cb_fi_srate);
@@ -212,7 +212,7 @@ o select both together");
       fi_romfname1->when(FL_WHEN_CHANGED);
     } // Fl_Input* fi_romfname1
     { Fl_Button* o = new Fl_Button(952, 46, 35, 20, "Sel");
-      o->tooltip("select a vsm rom, need to do this for both roms as they are paired");
+      o->tooltip("select a vsm rom, may need to do this twice, some roms came in pairs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_romfile1_sel);
     } // Fl_Button* o
@@ -237,7 +237,7 @@ udio");
       ck_pitch_6bits->callback((Fl_Callback*)cb_ck_pitch_6bits);
       ck_pitch_6bits->deactivate();
     } // Fl_Check_Button* ck_pitch_6bits
-    { fi_srate_au = new Fl_Value_Input(718, 96, 65, 20, "au srate:");
+    { fi_srate_au = new Fl_Value_Input(725, 96, 58, 19, "au srate:");
       fi_srate_au->tooltip("sample rate to use when saving the .au audio file");
       fi_srate_au->labelsize(12);
       fi_srate_au->textsize(11);
@@ -253,7 +253,7 @@ udio");
       fvs_au_aud_gain->textsize(7);
       fvs_au_aud_gain->callback((Fl_Callback*)cb_fvs_au_aud_gain);
     } // Fl_Value_Slider* fvs_au_aud_gain
-    { fi_au_fname = new Fl_Input(65, 96, 590, 20, "au fname:");
+    { fi_au_fname = new Fl_Input(66, 96, 560, 20, "au fname:");
       fi_au_fname->tooltip("enter .au filename to save audio into");
       fi_au_fname->labelsize(11);
       fi_au_fname->textsize(11);
@@ -425,6 +425,11 @@ and lattice iir filter coeffs");
       o->tooltip("save tms code table to text file");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_tms_code_tables_text_file, (void*)(1));
+    } // Fl_Button* o
+    { Fl_Button* o = new Fl_Button(628, 96, 35, 20, "Sel");
+      o->tooltip("select .au audio file");
+      o->labelsize(11);
+      o->callback((Fl_Callback*)cb_bt_aufile_sel);
     } // Fl_Button* o
     o->end();
   } // Fl_Double_Window* o
@@ -677,4 +682,8 @@ void cb_bt_addr_minus8(Fl_Widget*, void*) {
   modify_addr(-8);
   addr_add_history( last_say_offset );
   talk.say_repeat();
+}
+
+void cb_bt_aufile_sel(Fl_Widget*, void*) {
+  select_au_file();
 }

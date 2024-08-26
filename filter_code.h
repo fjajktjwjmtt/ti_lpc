@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //filter_code.h
-//v1.05
+//v1.07
 
 #ifndef filter_code_h
 #define filter_code_h
@@ -30,9 +30,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <vector>
 #include <complex>
 
-#include "globals.h"
+//#include "globals.h"					//v1.06
 #include "GCProfile.h"
-#include "mgraph.h"
+//#include "mgraph.h"					//v1.06
 #include "audio_formats.h"
 
 
@@ -101,8 +101,13 @@ namespace filter_code
 
 
 
-	typedef struct 
+	typedef struct 														//see 'create_filter_from_coeffs()' function for EXAMPLE of HOW to set this structure up
 	{
+	bool verb;															//verbose for debugging, v1.06
+	string suser0;														//user string for debugging	v1.06
+	string suser1;
+	int user_id0;														//user num storage
+	int user_id1;
 	bool created;
 	int coeff_cnt;
 	double *coeff_ptr;
@@ -111,7 +116,6 @@ namespace filter_code
 	bool bypass;
 
 	} st_fir;
-
 
 
 

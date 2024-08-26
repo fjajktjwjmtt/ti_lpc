@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.05 	18-sep-2022			//added more features, such as auto address stepping with delta and delay options, see 'addr_step_auto_val_delay',  'addr_step_auto_val_delta'
 //v1.06		22-jul-2023			//moded for namespace 'filter_code::'
 //v1.07		18-sep-2023			//moded for namespace 'gc_srateconv::'
+//v1.08		27-aug-2024			//added .au audio file select dialog via button, refer: 'select_au_file()'  'slast_au_filename'
 
 
 
@@ -109,6 +110,7 @@ string slast_filename;
 string slast_binary_file;
 string slast_rom0_filename;
 string slast_rom1_filename;
+string slast_au_filename;
 string slast_lpc_hex_byte_text_fname;
 string slast_tms_code_tables_text_fname;
 
@@ -280,7 +282,7 @@ int16_t tms_k9_0280[ 8 ] = { -179, -122, -61, 1, 62, 123, 179, 231  };
 
 int8_t chirp_0280[ CHIRP_SIZE_0280 + 2] = { 0, 42, 212, 50, 178, 18, 37, 20, 2, 225, 197, 2, 95, 90, 5, 15, 38, 252, 165, 165, 214, 221, 220, 252, 37, 43, 34, 33, 15, 255, 248, 238, 237, 239, 247, 246, 250, 0, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-int ichirp_size = CHIRP_SIZE_0280;								//this will change id user modifiesthe chirp byte string in text edit
+int ichirp_size = CHIRP_SIZE_0280;								//this will change if user modifies the chirp byte string in text edit
 
 
 mystr tim1;
@@ -1411,13 +1413,16 @@ fi_romfname->value( slast_rom0_filename.c_str() );
 p.GetPrivateProfileStr( "Settings", "last_rom1_filename", "tmc0352n2l.vsm", &slast_rom1_filename );
 fi_romfname1->value( slast_rom1_filename.c_str() );
 
+p.GetPrivateProfileStr( "Settings", "last_au_filename", "zz_audio.au", &slast_au_filename );
+fi_au_fname->value( slast_au_filename.c_str() );
+
 p.GetPrivateProfileStr( "Settings", "slast_lpc_hex_byte_text_fname", "zz_lpc_hex_byte_string.txt", &slast_lpc_hex_byte_text_fname );
 p.GetPrivateProfileStr( "Settings", "slast_tms_code_tables_text_fname", "zz_tms_code_table.txt", &slast_tms_code_tables_text_fname );
 
 
-s1 = fi_au_fname->value();
-p.GetPrivateProfileStr( "Settings", "au_fname", "zz_audio.au", &s1 );
-fi_au_fname->value( s1.c_str() );
+//s1 = fi_au_fname->value();
+//p.GetPrivateProfileStr( "Settings", "au_fname", "zz_audio.au", &s1 );
+//fi_au_fname->value( s1.c_str() );
 
 
 p.GetPrivateProfileStr( "Settings", "rom_addr", "510", &s1  );
@@ -1536,12 +1541,11 @@ p.WritePrivateProfileStr("Settings","last_rom0_filename", slast_rom0_filename );
 slast_rom1_filename = fi_romfname1->value();
 p.WritePrivateProfileStr("Settings","last_rom1_filename", slast_rom1_filename );
 
+s1 = fi_au_fname->value();
+p.WritePrivateProfileStr("Settings","last_au_filename", s1 );
+
 p.WritePrivateProfileStr("Settings","slast_lpc_hex_byte_text_fname", slast_lpc_hex_byte_text_fname );
 p.WritePrivateProfileStr("Settings","slast_tms_code_tables_text_fname", slast_tms_code_tables_text_fname );
-
-
-s1 = fi_au_fname->value();
-p.WritePrivateProfileStr("Settings","au_fname", s1 );
 
 
 p.WritePrivateProfileLONG("Settings","aud_gain", fvs_aud_gain->value() );
@@ -2011,7 +2015,7 @@ if( my_file_chooser( s2, "Save File?", "*", s1.c_str(), Fl_File_Chooser::CREATE,
 
 
 
-bool open_file( string &ss )
+bool open_file( string &ss, int type )
 {
 mystr m1;
 string s1, s2;
@@ -2025,7 +2029,7 @@ if( !m1.filesize( s1, filesz ) )				//need this for windows, else dialog does no
 	s1 = "";
 	}
 
-if( my_file_chooser( s2, "Select File?", "*", s1.c_str(), 0, font_num, font_size ) )
+if( my_file_chooser( s2, "Select File?", "*", s1.c_str(), type, font_num, font_size ) )
 	{
 
 //	cslpf( "You selected file: '%s'\n", s2.c_str() );
@@ -2053,11 +2057,13 @@ return 0;
 bool select_rom_file()
 {
 	
-if( open_file( slast_rom0_filename ) )
+if( open_file( slast_rom0_filename, Fl_File_Chooser::SINGLE ) )
 	{
 	fi_romfname->value( slast_rom0_filename.c_str() );		
 	build_rom_word_addr_list( 0x0000, slast_rom0_filename );
+	return 1;
 	}
+return 0;
 }
 
 
@@ -2066,12 +2072,31 @@ if( open_file( slast_rom0_filename ) )
 
 bool select_rom1_file()
 {
-if( open_file( slast_rom1_filename ) )
+if( open_file( slast_rom1_filename, Fl_File_Chooser::SINGLE ) )
 	{
 	fi_romfname1->value( slast_rom1_filename.c_str() );		
 	build_rom_word_addr_list( 0x4000, slast_rom1_filename );
+	return 1;
 	}
+return 0;
 }
+
+
+
+
+
+
+bool select_au_file()
+{
+if( open_file( slast_au_filename, Fl_File_Chooser::CREATE ) )
+	{
+	fi_au_fname->value( slast_au_filename.c_str() );		
+	return 1;
+	}
+return 0;
+}
+
+
 
 
 
@@ -2087,7 +2112,7 @@ Fl_Input *teText = new Fl_Input(10,10,wnd->w()-20,wnd->h()-20,"");
 teText->type(FL_MULTILINE_OUTPUT);
 teText->textsize(12);
 
-strpf( s1, "%s,  %s,  Built: %s\n", cnsAppWndName, "v1.07", cns_build_date );
+strpf( s1, "%s,  %s,  Built: %s\n", cnsAppWndName, "v1.08", cns_build_date );
 st += s1;
 
 
@@ -5353,7 +5378,7 @@ printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
 //			energy_interp = (1.0 - interp_mix) * last_energy  +  interp_mix * energy;		//do a linear interp mix
 
 
-			if( cur_period)
+			if( cur_period )
 				{
 				//voiced, glottal pitch chirp stimulus
 				if( period_cnt < 41 )

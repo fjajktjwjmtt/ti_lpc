@@ -93,4 +93,5 @@ void cb_bt_addr_play(Fl_Widget*, void*);
 void cb_bt_addr_enter(Fl_Widget*w, void*v);
 void cb_bt_addr_plus8(Fl_Widget*, void*);
 void cb_bt_addr_minus8(Fl_Widget*, void*);
+void cb_bt_aufile_sel(Fl_Widget*, void*);
 #endif
