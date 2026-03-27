@@ -1,4 +1,6 @@
-# A Makefile for both Linux and Windows,  10-nov-2016
+# A Makefile for both Linux and Windows,  
+# v1.01 	10-nov-2016
+# v1.02 	27-mar-2026		//set optimiser to -O3, was -O0
 
 #define all executables here
 
@@ -14,7 +16,7 @@ all: ${app_name}
 CC=g++
 
 ifneq ($(OS),Windows_NT)			#linux?
-	OPTMZ=-O0						# !!!!!!!!!!! -O0 for fast compile, see below specific optimization for certain sources
+	OPTMZ=-O3						# !!!!!!!!!!! -O0 for fast compile, see below specific optimization for certain sources
 	SIMD=
 
 	CFLAGS=-g -Wfatal-errors -Wfatal-errors -fpermissive -Wno-narrowing -fno-inline -Dbuild_date="\"`date +%Y-%b-%d`\"" #-Dbuild_date="\"2016-Mar-23\"" `pkg-config --cflags libpulse-simple` `pkg-config --cflags rtaudio`
@@ -23,7 +25,7 @@ ifneq ($(OS),Windows_NT)			#linux?
 	LIBS=-lfltk -lX11 -lrt -lm -lXcursor -lXfixes -lXext -lXft -lfontconfig -lXinerama -lXrender -lpthread -ldl -lX11 -lasound -ljack -lasound `pkg-config --libs rtaudio`	#64 bit
 	INCLUDE= -I/usr/include/cairo	#64 bit
 else								#windows?
-	OPTMZ=-O0						# !!!!!!!!!!! -O0 for fast compile, see below specific optimization for certain sources
+	OPTMZ=-O3						# !!!!!!!!!!! -O0 for fast compile, see below specific optimization for certain sources
 	SIMD=
 	CFLAGS=-g -fno-inline -DWIN32 -mms-bitfields -Dcompile_for_windows -Dbuild_date="\"`date +%Y\ %b\ %d`\""
 LIBS= -L/usr/local/lib -static -mwindows -lfltk -lole32 -luuid -lcomctl32 -lm -lwinmm

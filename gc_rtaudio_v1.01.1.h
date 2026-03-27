@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //gc_rtaudio.h
-//v1.03
+//v1.01.1
 
 
 #ifndef gc_rtaudio_h
@@ -25,8 +25,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
-#include <stdint.h>														//v1.03
 #include <fcntl.h>
 #include <time.h>
 #include <locale.h>
@@ -42,7 +42,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <rtaudio/RtAudio.h>
 #include <rtmidi/RtMidi.h>
-#include <rtaudio/RtAudio.h>
 
 
 

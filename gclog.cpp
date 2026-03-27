@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2018 BrerDawg
+Copyright (C) 2021 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-
 
 //gclog.cpp
 
@@ -630,7 +629,7 @@ tt.tm_isdst = 0;
 
 
 
-//e.g. pf( 5, "Tesing int=%05d, float=%f str=%s\n",z,(float)4.567,"I was Here" );
+//e.g. pf( 5, "Tesing int=%05d, float=%f str=%s\n",z,(float)4.567,"George was Here" );
 //the loglvl should be between 1 and 10 (or higher), 1 is highest 'priority'
 void gclog::pf( int loglvl, const char *fmt,... )
 {

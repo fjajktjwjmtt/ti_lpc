@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //	v1.01 25-01-12
 //	v1.02 15-jul-2018		//minor mod in 'gcpipe.h' for 64 bit compile
 
-
+//v1.03 	 17-Aug-2025	//increased size of 'szrd[]'
 
 #include "gcpipe.h"
 

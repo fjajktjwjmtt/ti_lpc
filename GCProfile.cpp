@@ -141,6 +141,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-----v1.80 27-dec-2023 	//moded 'GCProfile::Save()' to fix 'fprintf()' write size limit, now uses 'fwrite()'
 //-----v1.81 05-feb-2024 	//moded 'ExtractParamVal_with_delimit()' to return 0  if extracted param length is zero, e.g. this would happen when extracting 'events0=' when str contained this 'events0=,'
 //-----v1.82 04-mar-2024 	//removed unused var in printf which caused compiler warning
+//-----v1.83 11-jul-2025 	//'make_engineering_str()'  and  'make_engineering_str_exp()' to better handle  '< e-18'  and   '> e+18'  numbers by defaulting to '%g'
+//-----v1.84 24-aug-2025 	//added 'LoadVectorStringsWithinBoundingChars()'
+//-----v1.85 08-sep-2025	//added 'ExtractParamVal_with_no_value_with_delimit()'
+//-----v1.86 07-mar-2025	//fixed a compile with -O3 optimiser crash at runtime in prj 'rtl_scan' (did not happed with -O0 compile), by increasing -
+							//'szDefault[]' and used safer 'snprintf()' in 'GetPrivateProfileLONG()'  'GetPrivateProfileFLOAT()'  'GetPrivateProfileDOUBLE()' -
+							//crash would not happen with GDB, found by using gcc flags: '-fsanitize=address -fno-omit-frame-pointer' ----  after compile -
+							//and run of 'rtl_scan' from console,  console showed where crash occurred in c code
 
 #include "GCProfile.h"
 //note a line entry cannot be bigger that cnMaxIniEntrySize
@@ -2011,6 +2018,87 @@ return vstr.size();
 
 
 
+
+//--- example code ---
+//s1 = "\"hello{bye\" { { \"one\" }  { two } { \"three{four\"} }  {\"five{six}seven\"}";
+
+//char ch_bound_start = '{';
+//char ch_bound_end = '}';
+//bool b_ignore_bounds_in_quotes = 1;
+//char ch_quote = '"';
+//bool b_remove_bound_chars = 0;
+
+//vector<string> vstr;
+//LoadVectorStringsWithinBoundingChars( vstr, ch_bound_start, ch_bound_end, b_ignore_bounds_in_quotes, b_remove_bound_chars, ch_quote );
+
+//--- result ----
+//vstr[0]: { { "one" }  { two } { "three{four"} }
+//vstr[1]: {"five{six}seven"}
+
+//returns vector size entry count, else 0
+int mystr::LoadVectorStringsWithinBoundingChars( vector<string> &vstr, char ch_bound_start, char ch_bound_end, bool b_ignore_bounds_in_quotes, bool b_remove_bound_chars, char ch_quote )
+{
+vstr.clear();
+string s1, s2, st;
+
+
+int in_bounds = 0;
+int in_quotes = 0;
+for( int i = 0; i < csStr.size(); i++ )
+	{
+	char ch = csStr[i];
+	
+	bool add_char = 1;
+
+	bool quote_active = 0;
+	if( ( in_quotes ) && ( b_ignore_bounds_in_quotes ) ) quote_active = 1;
+	
+	if( ( ch == ch_bound_start ) && ( !quote_active ) )
+		{
+		in_bounds++;													//handle nested bounding regions
+		if( b_remove_bound_chars ) if( in_bounds == 1 ) add_char = 0;
+		}
+
+	if( ( ch == ch_bound_end ) && ( !quote_active ) )
+		{
+		if( b_remove_bound_chars ) if( in_bounds == 1 ) add_char = 0;
+		
+		in_bounds--;
+		}
+
+	if( ch == ch_quote )
+		{
+		in_quotes = !in_quotes;
+		}
+
+
+
+	if( ch == ch_bound_end )
+		{
+		if( add_char ) st += ch;
+
+		if( in_bounds == 0  ) 
+			{
+			vstr.push_back( st );
+			st = "";
+			}
+		
+		}
+	else{
+		if( add_char ) if( in_bounds != 0 ) st += ch;
+		}
+		
+	}
+
+return vstr.size();
+}
+
+
+
+
+
+
+
 //load supplied 2 dimensional string array with strings extracted from mystr obj's string.
 //a suitable string is similar to: fruit=apple,cutlery=spoon,door=open,door=closed
 //the user defined char equate: would be '=', 
@@ -2430,6 +2518,50 @@ return 1;
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//same as 'ExtractParamVal_with_delimit()' but returns 1 even if there is no 'equ', ie. returns 1 if it finds 'param' alone, e.g: '--run'
+//v1.85
+int mystr::ExtractParamVal_with_no_value_with_delimit(string param, string delim, string &equ)		//<---------------- see also:  ExtractParamValNotingUserQuotes(..)
+{
+int iPos=0,iEndPos;
+int iLen;
+int iLenParam;
+
+iLen=csStr.length();
+if(iLen<3) return 0;
+
+iLenParam=param.length();
+if(iLenParam==0) return 0;
+
+iPos=csStr.find(param,iPos);	
+if(iPos==string::npos) return 0;
+iPos+=param.length();							//skip over 'param='
+
+iEndPos=csStr.find( delim, iPos);					//find start of next param if any
+if(iEndPos==string::npos)						//no ending comma?
+	{
+	iEndPos=iLen;	
+	}
+				
+equ=csStr.substr(iPos,iEndPos-iPos);
+
+//if( equ.length() == 0 ) return 0;										//v1.85
+
+return 1;	
+}
 
 
 
@@ -7076,12 +7208,14 @@ if( dvalue < 1e-1 )
 		goto done;
 		}
 
-	if( dvalue < 1e-15 )
+	if( ( dvalue >= 1e-18 ) && ( dvalue < 1e-15 ) )						//v1.83
 		{
 		dvalue /= 1e-18;
 		strpf( sunits, "a" );			//atto
 		goto done;
 		}
+
+	sprec = "\%g";														//v1.83
 	}
 else{
 	if( dvalue < 1e3 )
@@ -7124,13 +7258,14 @@ else{
 		goto done;
 		}
 
-	if( dvalue >= 1e18 )
+	if( ( dvalue >= 1e18 ) && ( dvalue < 1e21 ) )						//v1.83
 		{
 		dvalue /= 1e18;
 		strpf( sunits, "E" );
 		goto done;
 		}
 
+	sprec = "\%g";														//v1.83
 	}
 
 done:
@@ -7270,12 +7405,14 @@ if( dvalue < 1e-1 )
 		goto done;
 		}
 
-	if( dvalue < 1e-15 )
+	if( ( dvalue >= 1e-18 ) && ( dvalue < 1e-15 ) )						//v1.83
 		{
 		dvalue /= 1e-18;
 		strpf( sunits, "e-18" );			//atto
 		goto done;
 		}
+
+	sprec = "\%g";														//v1.83
 	}
 else{
 	string splus;
@@ -7320,13 +7457,14 @@ else{
 		goto done;
 		}
 
-	if( dvalue >= 1e18 )
+	if( ( dvalue >= 1e18 ) && ( dvalue < 1e21 ) )						//v1.83
 		{
 		dvalue /= 1e18;
 		strpf( sunits, "e%s18", splus.c_str() );
 		goto done;
 		}
 
+	sprec = "\%g";														//v1.83
 	}
 
 done:
@@ -8790,12 +8928,13 @@ return 0;
 
 long GCProfile::GetPrivateProfileLONG(string csSection,string csKey,long lDefault)
 {
-char szDefault[15];
+char szDefault[64];														//v1.86
 string csDefault;
 string csRet;
 long lRet;
 
-sprintf(szDefault,"%ld",lDefault);
+//sprintf(szDefault,"%ld",lDefault);
+snprintf(szDefault,sizeof( szDefault ), "%ld",lDefault);				//v1.86
 
 csDefault=szDefault;
 
@@ -8819,12 +8958,13 @@ return lRet;
 
 float GCProfile::GetPrivateProfileFLOAT(string csSection,string csKey,float fDefault)
 {
-char szDefault[15];
+char szDefault[64];														//v1.86
 string csDefault;
 string csRet;
 float fRet;
 
-sprintf(szDefault,"%f",fDefault);
+//sprintf(szDefault,"%f",fDefault);
+snprintf(szDefault, sizeof( szDefault ), "%f", fDefault);				//v1.86
 
 csDefault=szDefault;
 
@@ -8847,12 +8987,13 @@ return fRet;
 
 double GCProfile::GetPrivateProfileDOUBLE(string csSection,string csKey,double dDefault)
 {
-char szDefault[15];
+char szDefault[64];														//v1.86
 string csDefault;
 string csRet;
 double dRet;
 
-sprintf(szDefault,"%lg",dDefault);
+//sprintf(szDefault,"%lg",dDefault);
+snprintf(szDefault, sizeof( szDefault ), "%lg", dDefault);				//v1.86
 
 csDefault=szDefault;
 

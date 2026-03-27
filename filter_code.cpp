@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2025 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -32,20 +32,47 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 							//changed 'delete' to 'delete[]'
 							//added 'st_fir.verb'  'st_fir.suser0'  'st_fir.suser1'  'st_fir.user_id0'  'st_fir.user_id1'
 
+//v1.07		08-mar-2025		//added to 'st_iir'  'user0', 'user_id0' etc, for debug purposes
+
+//v1.08		28-apr-2025		//added 'window_calc_and_apply_float()', 'window_function_float()', also changed mem deletes, eg changed: 'delete w;'  to  'delete[] w;'
+							//completed code for type: 'fwt_kaiser' used a by various functions, NOTE:  you may need to ADJUST as req: 'kaiser_alpha' 'kaiser_k'
+							
+
+//v1.09		13-jun-2025		//added 'st_cplex_float_tag'
+
+//v1.10		22-dec-2025		//added 'load_coeffs_from_file_float()' 'load_coeffs_from_file_double()'
+//v1.11		07-jan-2026		//added 'polyphase_filter_downsampler_complex()'    'polyphase_filter_downsampler_for_fft()'    'polyphase_filter_upsampler_complex()'   'polyphase_filter_upsampler_complex_vector()'
+//v1.12		23-jan-2026		//added 'load_coeffs_from_string_float()'  'load_coeffs_from_string_double()'
+							//added 'save_coeffs_vector_float()'  'save_coeffs_vector_double()'
+							//added 'make_string_from_coeffs_float()'  'make_string_from_coeffs_double()' 
+
+//v1.13		05-mar-2026		//added complex cojugate function and complex multiply operator  to 'st_cplex_tag' and 'st_cplex_float_tag'
+
+//v1.14		14-mar-2026		//moded 'load_coeffs_from_string_double()'  'load_coeffs_from_string_float()'  to strip commas and some c code formatting when pasting coeffs from a c code struct
+							//removed code in 'iir_init()' which stopped iir being cleared if it was not in a 'created' state, this helps if 'iir.dly0' or 'iir.dly1' has a stuck NAN value in either of them
+//v1.15		23-mar-2026		//added 'window_kaiser_float()' ' window_kaiser_double()'
+							//added 'make_halfband_coeffs_float()'  'make_halfband_coeffs_double()'
+							//added fixed kaiser code to match python's version of numpy.kaiser(), now use 'filter_code::kaiser_beta', removed: 'filter_code::kaiser_alpha'  and 'filter_code::kaiser_k'
+							//added 'create_iir_filter_from_coeffs_b0_first()'
+
 
 
 #include "filter_code.h"
 
 namespace filter_code
 	{
+	#define pi (M_PI)
+	#define twopi (2.0*M_PI)
 
 float iir2nd_coeffs[5];													//second order iir
 
 
-#define twopi (2.0*M_PI)
 
 
+//double kaiser_alpha = 1.27;				//v1.08, alpha of '1.27' has a beta value of 4  (4/pi)
+//int kaiser_k = 5;						//v1.08, defines iteration count to use when calculating Io (I0), the zeroth order of the modified Bessel function of the first kind
 
+double kaiser_beta = 6;
 
 
 //reads an iowa hills coeffients text file and get filter coeffs for one specified section,
@@ -248,10 +275,11 @@ of.delay1[0] = sum_rev1;												//ch1
 //----------------------------------------------------------------------
 void iir_init( st_iir &iir )
 {
-if( iir.created == 0 ) return;
+//if( iir.created == 0 ) return;										//v1.14
 
 iir.dly0 = 0;
 iir.dly1 = 0;
+
 }
 
 
@@ -267,7 +295,6 @@ void iir_delete_filter( st_iir &iir )
 if ( iir.created == 0 ) return;
 
 iir.created = 0;
-
 }
 
 
@@ -336,11 +363,7 @@ return sum_fwd;
 
 
 
-
-
-
-
-//build a filter from a vector loaded with coeffs
+//build a filter using 'vcoeff' coeffs, assumes ordering is 'a1,a2,b0,b1,b2' --- denominator first
 bool create_iir_filter_from_coeffs( st_iir &iir, vector<double> &vcoeff )
 {
 
@@ -355,6 +378,37 @@ iir.a2 = vcoeff[1];
 iir.b0 = vcoeff[2];
 iir.b1 = vcoeff[3];
 iir.b2 = vcoeff[4];
+
+iir.coeff_cnt = vcoeff.size();
+iir.bypass = 0;
+
+iir_init( iir );									//clear iir delays
+
+iir.created = 1;
+
+return 1;
+}
+
+
+
+
+
+
+//build a filter using 'vcoeff' coeffs, assumes ordering is 'b0,b1,b2,a1,a2' --- numerator first
+bool create_iir_filter_from_coeffs_b0_first( st_iir &iir, vector<double> &vcoeff )
+{
+
+if( iir.created ) iir_delete_filter( iir );
+
+//if( vcoeff.size() == 0 ) return 0;
+if( vcoeff.size() < 5  ) return 0;
+
+
+iir.b0 = vcoeff[0];
+iir.b1 = vcoeff[1];
+iir.b2 = vcoeff[2];
+iir.a1 = vcoeff[3];									//load coeffs
+iir.a2 = vcoeff[4];
 
 iir.coeff_cnt = vcoeff.size();
 iir.bypass = 0;
@@ -450,8 +504,9 @@ d0 = sum_rev;
 
 bool calc_filter_iir_2nd_order( en_filter_pass_type_tag filt_type, double fc1, double in_Q, double db_gain, double srate, vector<double> &vcoeff )
 {
+bool vb = 1;
 
-printf( "filter_iir_2nd_order() - type: %u, fc1: %f, q: %f, db_gain: %f\n", filt_type, fc1, in_Q, db_gain );
+if(vb)printf( "filter_iir_2nd_order() - type: %u, fc1: %f, q: %f, db_gain: %f, srate: %f\n", filt_type, fc1, in_Q, db_gain, srate );
 
 if( fc1 >= srate / 2.0 )
 	{
@@ -481,7 +536,7 @@ double b0, b1, b2;
 
 bool ok = 0;
 
-printf( "filter_iir_2nd_order() - w0: %f, alpha: %f, A: %f\n", w0, alpha, A );
+if(vb)printf( "filter_iir_2nd_order() - w0: %f, alpha: %f, A: %f\n", w0, alpha, A );
 
 if( filt_type == fpt_lowpass )
     {
@@ -599,10 +654,12 @@ vcoeff.push_back( b1 / a0 );
 vcoeff.push_back( b2 / a0 );
 
 
-printf( "filter_iir_2nd_order():\n" );
-printf( "a1: %f, a2: %f\n", a1 / a0, a2 / a0 );
-printf( "b0: %f, b1: %f, b2: %f\n", b0 / a0, b1 / a0, b2 / a0 );
-
+if( vb )
+	{
+	printf( "filter_iir_2nd_order():\n" );
+	printf( "a1: %f, a2: %f\n", a1 / a0, a2 / a0 );
+	printf( "b0: %f, b1: %f, b2: %f\n", b0 / a0, b1 / a0, b2 / a0 );
+	}
 //conv_vcoeff_to_scoeff( vcoeff, scoeff );
 
 return 1;
@@ -690,12 +747,11 @@ double M = (double)Nf / 2.0;
 
 
 
-//!! fix this
-if( wnd_type == fwt_kaiser )
-    {
-    wnd_type = fwt_undefined;
-    printf( "filter_fir_windowed() - wnd=kaiser not yet supported\n" );
-    }
+//once only calc done here to reduce workload in loop
+//float kaiser_pi_a = pi * kaiser_alpha;									//beta param
+//float kaiser_denom = kaiser_Io( kaiser_pi_a );
+
+float I0_beta = std::cyl_bessel_i(0, kaiser_beta );						//do once only
 
 
 for( double n = 0; n < N; n++ )
@@ -770,6 +826,30 @@ for( double n = 0; n < N; n++ )
 			else w[ i ] = 0;
 		break;
 
+/*
+		case fwt_kaiser:							//v1.08				//make SURE you set 'filter_code::kaiser_alpha' to value you require
+			{
+			{
+			float kaiser_w0 = kaiser_Io( kaiser_pi_a * sqrtf( 1 - powf( (2.0f*((float)i/N) - 1 ), 2 ) ) );	//refer: https://en.wikipedia.org/wiki/Kaiser_window
+			kaiser_w0 /= kaiser_denom;
+
+			w[ i ] = kaiser_w0;
+			}
+			}
+		break;
+*/
+
+		case fwt_kaiser:												//v1.15, make SURE you set 'filter_code::kaiser_beta' to value you require
+			{
+			float x = 2.0f * i / (N - 1.0f) - 1.0f;          			//map to [-1,1]
+			float t = kaiser_beta * std::sqrtf(1.0f - x * x);     		//argument for I0
+			w[ i ] = std::cyl_bessel_i(0, t) / I0_beta;    				//normalize kaiser wnd
+
+//printf( "filter_fir_windowed() - fwt_kaiser w[%03d] %f\n", i, w[ i ] );
+			}
+		break;
+
+
 
 
 		default:
@@ -827,9 +907,9 @@ for( double n = 0; n < N; n++ )
 
 
 
-delete w;
-delete hd;
-delete hcoeff;
+delete[] w;																//v1.08
+delete[] hd;
+delete[] hcoeff;
 
 
 return 1;
@@ -966,10 +1046,10 @@ if(vb)printf( "delete_filter() - about to delete filter, '%s' '%s'\n", fir.suser
 
 fir.created = 0;
 
-if(vb)printf( "delete_filter() - deleted filter, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
 delete[] fir.coeff_ptr;													//v1.06
 delete[] fir.prev;
+if(vb)printf( "delete_filter() - deleted filter, '%s' '%s'\n", fir.suser0.c_str(), fir.suser1.c_str() );	
 
 fir.coeff_ptr = 0;
 fir.prev = 0;
@@ -1346,6 +1426,413 @@ return 1;
 
 
 
+//read coeffs from spec file into 'vcoeff', must have one coeff per text line
+bool load_coeffs_from_file_float( string fname, vector<float> &vcoeff )					//v1.10
+{
+mystr m1, m2;
+string s1;
+double dd;
+vector<double> vd;
+
+vcoeff.clear();
+
+
+if( m1.readfile( fname, 10000 ) == 0 )
+	{
+	printf( "load_coeffs_from_file_float() - failed to open file: '%s'\n", fname.c_str()  );
+	return 0;
+	}
+
+s1 = m1.str();
+s1 += "\r\n";							//ensure ending newline
+m1 = s1;
+
+
+while( 1 )
+	{
+	if( m1.gets( s1 ) == 0 ) break;
+
+	m2 = s1;
+	m2.cut_at_first_find( s1, "//", 0 );		// cut off any comments
+
+	m2 = s1;
+	m2.to_lower( s1 );								//change to lowercase
+
+	if( s1.find( "end" ) != string::npos ) break;	//end found on this line?
+
+		
+	int ret = sscanf( s1.c_str(), "%lf", &dd );
+
+	if( ( ret != 0 ) && ( ret != EOF ) )		//conv to double
+		{
+		vcoeff.push_back( dd );
+		}
+	}
+
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "load_coeffs_from_file_float() - no coeff read: '%s'\n", fname.c_str()  );
+	return 0;
+	}
+
+return 1;
+}
+
+
+
+
+
+
+
+
+
+//read coeffs from spec file into 'vcoeff', must have one coeff per text line
+bool load_coeffs_from_file_double( string fname, vector<double> &vcoeff )				//v1.10
+{
+mystr m1, m2;
+string s1;
+double dd;
+vector<double> vd;
+
+vcoeff.clear();
+
+
+if( m1.readfile( fname, 10000 ) == 0 )
+	{
+	printf( "load_coeffs_from_file_double() - failed to open file: '%s'\n", fname.c_str()  );
+	return 0;
+	}
+
+s1 = m1.str();
+s1 += "\r\n";							//ensure ending newline
+m1 = s1;
+
+
+while( 1 )
+	{
+	if( m1.gets( s1 ) == 0 ) break;
+
+	m2 = s1;
+	m2.cut_at_first_find( s1, "//", 0 );		// cut off any comments
+
+	m2 = s1;
+	m2.to_lower( s1 );								//change to lowercase
+
+	if( s1.find( "end" ) != string::npos ) break;	//end found on this line?
+
+		
+	int ret = sscanf( s1.c_str(), "%lf", &dd );
+
+	if( ( ret != 0 ) && ( ret != EOF ) )		//conv to double
+		{
+		vcoeff.push_back( dd );
+		}
+	}
+
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "load_coeffs_from_file_double() - no coeff read: '%s'\n", fname.c_str()  );
+	return 0;
+	}
+
+return 1;
+}
+
+
+
+
+
+
+
+
+
+
+
+//read coeffs from string 'scoeff' into 'vcoeff', will to reformat to have one coeff per text line, allows for some c code formatting to be cleaned off
+bool load_coeffs_from_string_float( string scoeff, vector<float> &vcoeff )
+{
+mystr m1, m2;
+string s1;
+double dd;
+vector<double> vd;
+
+m1 = scoeff;
+
+m1.FindReplace( s1, "\r", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, "{", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, "}", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, ",\n", "\n", 0 );									//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, ",", "\n", 0 );
+m1 = s1;
+
+m1.FindReplace( s1, "f", "", 0 );										//remove possible c float suffix, like 1.23f
+m1 = s1;
+
+scoeff = s1;
+
+if( scoeff.length() == 0 )
+	{
+	printf( "load_coeffs_from_string() - 'scoeff' is empty\n"  );
+	return 0;
+	}
+
+vcoeff.clear();
+
+
+s1 = scoeff;
+
+s1 += "\r\n";							//ensure ending newline
+m1 = s1;
+
+
+while( 1 )
+	{
+	if( m1.gets( s1 ) == 0 ) break;
+
+	m2 = s1;
+	m2.cut_at_first_find( s1, "//", 0 );		// cut off any comments
+
+	m2 = s1;
+	m2.to_lower( s1 );								//change to lowercase
+
+	if( s1.find( "end" ) != string::npos ) break;	//end found on this line?
+
+		
+	int ret = sscanf( s1.c_str(), "%lf", &dd );
+
+	if( ( ret != 0 ) && ( ret != EOF ) )		//conv to float
+		{
+		vcoeff.push_back( dd );
+		}
+	}
+
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "load_coeffs_from_file_double() - no coeffs read\n" );
+	return 0;
+	}
+
+return 1;
+}
+
+
+
+
+
+
+//read coeffs from string 'scoeff' into 'vcoeff', will to reformat to have one coeff per text line, allows for some c code formatting to be cleaned off
+bool load_coeffs_from_string_double( string scoeff, vector<double> &vcoeff )
+{
+mystr m1, m2;
+string s1;
+double dd;
+vector<double> vd;
+
+m1 = scoeff;
+
+m1.FindReplace( s1, "\r", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, "{", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, "}", "", 0 );										//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, ",\n", "\n", 0 );									//clean up to one coeff per line
+m1 = s1;
+
+m1.FindReplace( s1, ",", "\n", 0 );
+m1 = s1;
+
+m1.FindReplace( s1, "f", "", 0 );										//remove possible c float suffix, like 1.23f
+m1 = s1;
+
+scoeff = s1;
+
+if( scoeff.length() == 0 )
+	{
+	printf( "load_coeffs_from_string() - 'scoeff' is empty\n"  );
+	return 0;
+	}
+
+vcoeff.clear();
+
+
+s1 = scoeff;
+
+s1 += "\r\n";							//ensure ending newline
+m1 = s1;
+
+
+while( 1 )
+	{
+	if( m1.gets( s1 ) == 0 ) break;
+
+	m2 = s1;
+	m2.cut_at_first_find( s1, "//", 0 );		// cut off any comments
+
+	m2 = s1;
+	m2.to_lower( s1 );								//change to lowercase
+
+	if( s1.find( "end" ) != string::npos ) break;	//end found on this line?
+
+		
+	int ret = sscanf( s1.c_str(), "%lf", &dd );
+
+	if( ( ret != 0 ) && ( ret != EOF ) )		//conv to double
+		{
+		vcoeff.push_back( dd );
+		}
+	}
+
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "load_coeffs_from_file_double() - no coeffs read\n" );
+	return 0;
+	}
+
+return 1;
+}
+
+
+
+
+
+
+
+void make_string_from_coeffs_float( vector<float>vcef, string &sout )
+{
+sout = "";
+
+
+string s1, st;
+
+for( int i = 0; i < vcef.size(); i++ )
+	{
+	strpf( s1, "%.8f", vcef[i] );
+	sout += s1;
+	sout +="\n";
+	}	
+}
+
+
+
+
+
+
+
+void make_string_from_coeffs_double( vector<double>vcef, string &sout )
+{
+sout = "";
+
+
+string s1, st;
+
+for( int i = 0; i < vcef.size(); i++ )
+	{
+	strpf( s1, "%.17f", vcef[i] );
+	sout += s1;
+	sout +="\n";
+	}	
+	
+}
+
+
+
+
+
+
+
+//saves 'vcoeff', one coeff per text line
+bool save_coeffs_vector_float( string fname, vector<float> &vcoeff )
+{
+mystr m1;
+string s1, st;
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "save_coeffs_vector_float() - 'vcoeff' is empty\n"  );
+	return 0;
+	}
+
+for( int i = 0; i < vcoeff.size(); i++ )
+	{
+	strpf( s1, "%.17f", vcoeff[i] ); 
+	st += s1;
+	st += "\n" ;
+	}
+
+m1 = st;
+
+if( !m1.writefile( fname ) )
+	{
+	printf( "save_coeffs_vector_float() - failed to save file '%s'\n", fname.c_str() );
+	return 0;
+	}
+	
+return 1;
+}
+
+
+
+
+
+
+
+
+
+//saves 'vcoeff', one coeff per text line
+bool save_coeffs_vector_double( string fname, vector<double> &vcoeff )
+{
+mystr m1;
+string s1, st;
+
+if( vcoeff.size() == 0 )
+	{
+	printf( "save_coeffs_vector_double() - 'vcoeff' is empty\n"  );
+	return 0;
+	}
+
+for( int i = 0; i < vcoeff.size(); i++ )
+	{
+	strpf( s1, "%.17f", vcoeff[i] ); 
+	st += s1;
+	st += "\n" ;
+	}
+
+m1 = st;
+
+if( !m1.writefile( fname ) )
+	{
+	printf( "save_coeffs_vector_double() - failed to save file '%s'\n", fname.c_str() );
+	return 0;
+	}
+	
+return 1;
+}
+
+
+
+
+
+
+
+
+
+
 
 
 //build a filter from a string loaded with coeffs, allocates memory so it must be deleted
@@ -1427,7 +1914,1082 @@ return 1;
 }
 
 
-}		//namespace filter_code
+
+
+
+
+//refer: https://www.geeksforgeeks.org/one-line-function-for-factorial-of-a-number/
+int factorial( int n ) 
+{ 
+
+//single line to find factorial 
+return (n==1 || n==0) ? 1: n * factorial(n - 1);  
+} 
+
+
+
+
+
+
+
+
+
+
+
+/*	//v1.15, removed
+
+//calc zeroth order of the modified Bessel function of the first kind: Io(x), uses 'kaiser_k' which is user adjustable
+
+//refer: https://medium.com/@savinihemachandra/fir-filter-design-bandstop-filter-17bdace6a54e
+float kaiser_Io( float x )
+{
+if( kaiser_k <= 1 ) return 0;
+
+
+float Io = 0;
+
+for( int k = 1; k <= kaiser_k; k++ )
+	{
+	Io += powf( 1.0f/factorial(k) * powf(x/2.0f,k), 2.0f);
+	}
+	
+Io += 1.0f;
+
+//kaiser_I0_last = Io;
+
+return Io;
+}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+//v1.08
+//apply a window function to 'vsmpl[]' samples, calcs window shape as specified by 'wnd_type'
+//'vwnd[]' is loaded with the window sample points, for debug or display purposes
+bool window_calc_and_apply_float( en_filter_window_type_tag wnd_type, vector<float> &vsmpl, vector<float> &vwnd )
+{
+bool vb = 1;
+
+int ilow;
+float x;
+
+vwnd.clear();
+
+if( vsmpl.size() < 5 ) 
+	{
+	printf( "window_calc_and_apply_float() - not enough samples to work with, vsmpl.size(): %d\n", (int)vsmpl.size() );
+	return 0;
+	}
+
+
+
+int N = vsmpl.size();
+
+
+int cnt = N + 10;            //add some extra space
+
+float *w = new float[ cnt ];
+
+
+
+
+
+
+//once only calc done here to reduce workload in loop
+//float kaiser_pi_a = pi * kaiser_alpha;									//beta param
+//float kaiser_denom = kaiser_Io( kaiser_pi_a );
+
+float I0_beta = std::cyl_bessel_i(0, kaiser_beta );						//do once only
+
+for( float n = 0; n < N; n++ )
+	{
+	int i = (int)n;
+	
+    
+	switch( wnd_type )
+		{
+		case fwt_rect:
+			w[ i ] = 1.0f;                              										//rect window impulse resp
+		break;
+
+		case fwt_bartlett:
+            ilow = ( N - 1.0f ) / 2.0f ;                        //work out which formula to use (what side of the triangle peak we are in)
+            
+            if( i <= ilow ) w[ i ] = 2.0f * n / ( N - 1.0f ) ;                                //bartlett/triangle window impulse resp
+            else w[ i ] =  2.0f - 2.0f * n / ( N - 1.0f ) ;
+		break;
+
+		case fwt_hann:
+           w[ i ] = 0.5f * ( 1.0f - cos( ( twopi * n / ( N - 1.0f ) ) ) );                     //hann window impulse resp
+		break;
+
+		case fwt_bartlett_hanning:
+            w[ i ] = 0.62f - 0.48f * fabs( n / ( N - 1.0f ) - 0.5f ) + 0.38f * cos( ( twopi * ( n / ( N - 1.0f ) - 0.5f ) ) );        //bartlett-hanning window impulse resp
+		break;
+
+		case fwt_hamming:
+            w[ i ] = 0.54f - 0.46f * cos( twopi * n / ( N - 1.0f ) );            //hamming window impulse resp, note the text in  http://www.mikroe.com.. listed above is slightly incorrect, used wikipedia version
+		break;
+
+		case fwt_blackman:
+            w[ i ] = 0.42f - 0.5f * cos( twopi * n / ( N - 1.0f ) ) + 0.08f * cos( 2.0f * twopi * n / ( N - 1.0f ) );        //blackman window impulse resp
+		break;
+
+		case fwt_blackman_harris:
+            w[ i ] = 0.35875f - 0.48829f * cos( twopi * n / ( N - 1.0f ) ) + 0.14128f * cos( 2.0f * twopi * n / ( N - 1.0f ) ) - 0.01168f * cos( 3.0f * twopi * n / ( N - 1.0f ) );        //blackman-harris window impulse resp
+		break;
+
+
+		case fwt_lanczos1:							//v1.03
+			x = 2.0f * (float)n/(N-1);
+			x -= 1;
+			if (x < 0) x = - x;
+			if (x < 1) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 1.0f ) );
+			else w[ i ] = 0;
+		break;
+
+		case fwt_lanczos1_5:						//v1.03
+			x = 3.0f * (float)n/(N-1);
+			x -= 1.5f;
+			if (x < 0) x = - x;
+			if (x < 1.5f) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 1.5f ) );
+			else w[ i ] = 0;
+		break;
+
+
+		case fwt_lanczos2:							//v1.03
+			x = 4.0f * (float)n/(N-1);
+			x -= 2;
+			if (x < 0) x = - x;
+			if (x < 2) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 2.0f ) );
+			else w[ i ] = 0;
+		break;
+
+		case fwt_lanczos3:							//v1.03
+			x = 6.0f * (float)n/(N-1);
+			x -= 3;
+			if (x < 0) x = - x;
+			if (x < 3) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 3.0f ) );
+			else w[ i ] = 0;
+		break;
+
+/*
+		case fwt_kaiser:							//v1.08				//make SURE you set 'filter_code::kaiser_alpha' to value you require
+		
+			{
+			float kaiser_w0 = kaiser_Io( kaiser_pi_a * sqrtf( 1 - powf( (2.0f*((float)i/N) - 1 ), 2 ) ) );	//refer: https://en.wikipedia.org/wiki/Kaiser_window
+			kaiser_w0 /= kaiser_denom;
+
+			w[ i ] = kaiser_w0;
+			}
+		break;
+*/
+
+		case fwt_kaiser:												//v1.15, make SURE you set 'filter_code::kaiser_beta' to value you require
+			{
+			float x = 2.0f * i / (N - 1.0f) - 1.0f;          			//map to [-1,1]
+			float t = kaiser_beta * std::sqrtf(1.0f - x * x);     		//argument for I0
+			w[ i ] = std::cyl_bessel_i(0, t) / I0_beta;    				//normalize kaiser wnd
+			}
+		break;
+
+		default:
+			printf( "window_calc_and_apply_float() - unknown filter window type(wnd): %u\n", wnd_type );
+			return 0;
+		break;
+        }
+
+ 	}
+
+
+
+for( int i = 0; i < vsmpl.size(); i++ )
+	{
+	vsmpl[i] *= w[ i ];
+	}
+
+
+
+for( int i = 0; i < N; i++ )
+	{
+	vwnd.push_back( w[ i ] );
+	}
+
+
+
+
+
+delete[] w;
+
+return 1;
+}
+
+
+
+
+
+
+
+
+
+
+//v1.08
+//build a tapering window of shape: 'wnd_type' and 'len' samples
+bool window_function_float( en_filter_window_type_tag wnd_type, unsigned len, vector<float> &vwnd )
+{
+bool vb = 1;
+
+int ilow;
+float x;
+
+vwnd.clear();
+
+if( len < 5 ) 
+	{
+	printf( "window_function_float() - not enough samples to work with, 'len': %d\n", len );
+	return 0;
+	}
+
+if( len > 1024*1024*16 ) 
+	{
+	printf( "window_function_float() - too many samples specified, 'len': %d (limit is 16 megasamples)\n", 1024*1024*16 );
+	return 0;
+	}
+
+
+int N = len;
+
+
+
+float *w = new float[ N ];
+
+
+
+
+
+//once only calc done here to reduce workload in loop
+//float kaiser_pi_a = pi * kaiser_alpha;									//beta param
+//float kaiser_denom = kaiser_Io( kaiser_pi_a );
+
+float I0_beta = std::cyl_bessel_i(0, kaiser_beta );						//do once only
+
+for( float n = 0; n < N; n++ )
+	{
+	int i = (int)n;
+	
+    
+	switch( wnd_type )
+		{
+		case fwt_rect:
+			w[ i ] = 1.0f;                              										//rect window impulse resp
+		break;
+
+		case fwt_bartlett:
+            ilow = ( N - 1.0f ) / 2.0f ;                        //work out which formula to use (what side of the triangle peak we are in)
+            
+            if( i <= ilow ) w[ i ] = 2.0f * n / ( N - 1.0f ) ;                                //bartlett/triangle window impulse resp
+            else w[ i ] =  2.0f - 2.0f * n / ( N - 1.0f ) ;
+		break;
+
+		case fwt_hann:
+           w[ i ] = 0.5f * ( 1.0f - cos( ( twopi * n / ( N - 1.0f ) ) ) );                     //hann window impulse resp
+		break;
+
+		case fwt_bartlett_hanning:
+            w[ i ] = 0.62f - 0.48f * fabs( n / ( N - 1.0f ) - 0.5f ) + 0.38f * cos( ( twopi * ( n / ( N - 1.0f ) - 0.5f ) ) );        //bartlett-hanning window impulse resp
+		break;
+
+		case fwt_hamming:
+            w[ i ] = 0.54f - 0.46f * cos( twopi * n / ( N - 1.0f ) );            //hamming window impulse resp, note the text in  http://www.mikroe.com.. listed above is slightly incorrect, used wikipedia version
+		break;
+
+		case fwt_blackman:
+            w[ i ] = 0.42f - 0.5f * cos( twopi * n / ( N - 1.0f ) ) + 0.08f * cos( 2.0f * twopi * n / ( N - 1.0f ) );        //blackman window impulse resp
+		break;
+
+		case fwt_blackman_harris:
+            w[ i ] = 0.35875f - 0.48829f * cos( twopi * n / ( N - 1.0f ) ) + 0.14128f * cos( 2.0f * twopi * n / ( N - 1.0f ) ) - 0.01168f * cos( 3.0f * twopi * n / ( N - 1.0f ) );        //blackman-harris window impulse resp
+		break;
+
+		case fwt_lanczos1:							//v1.03
+			x = 2.0f * (float)n/(N-1);
+			x -= 1;
+			if (x < 0) x = - x;
+			if (x < 1) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 1.0 ) );
+			else w[ i ] = 0;
+		break;
+
+		case fwt_lanczos1_5:						//v1.03
+			x = 3.0f * (float)n/(N-1);
+			x -= 1.5f;
+			if (x < 0) x = - x;
+			if (x < 1.5) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 1.5 ) );
+			else w[ i ] = 0;
+		break;
+
+
+		case fwt_lanczos2:							//v1.03
+			x = 4.0f * (float)n/(N-1);
+			x -= 2;
+			if (x < 0) x = - x;
+			if (x < 2) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 2.0 ) );
+			else w[ i ] = 0;
+		break;
+
+		case fwt_lanczos3:							//v1.03
+			x = 6.0f * (float)n/(N-1);
+			x -= 3;
+			if (x < 0) x = - x;
+			if (x < 3) w[ i ] = ( filter_fir_sinc( x ) * filter_fir_sinc( x / 3.0 ) );
+			else w[ i ] = 0;
+		break;
+
+/*
+		case fwt_kaiser:							//v1.08				//make SURE you set 'filter_code::kaiser_alpha' to value you require
+		
+			{
+			
+			float kaiser_w0 = kaiser_Io( kaiser_pi_a * sqrtf( 1 - powf( (2.0f*((float)i/N) - 1 ), 2 ) ) );	//refer: https://en.wikipedia.org/wiki/Kaiser_window
+			kaiser_w0 /= kaiser_denom;
+
+			w[ i ] = kaiser_w0;
+			}
+		break;
+*/
+
+		case fwt_kaiser:												//v1.15, make SURE you set 'filter_code::kaiser_beta' to value you require
+			{
+
+			float x = 2.0f * i / (N - 1.0f) - 1.0f;          			//map to [-1,1]
+			float t = kaiser_beta * std::sqrtf(1.0f - x * x);     		//argument for I0
+			w[ i ] = std::cyl_bessel_i(0, t) / I0_beta;    				//normalize kaiser wnd
+			}
+		break;
+
+
+
+
+		default:
+			printf( "window_function_float() - unknown filter window type(wnd): %u\n", wnd_type );
+			return 0;
+		break;
+        }
+
+ 	}
+
+
+for( int i = 0; i < N; i++ )
+	{
+	vwnd.push_back( w[ i ] );
+	}
+
+
+
+delete[] w;
+
+return 1;
+}
+
+
+
+
+
+
+
+
+
+
+//refer: https://www.dsprelated.com/showarticle/1113.php
+//try 'kaiser_beta' = 6
+void window_kaiser_float( int ntaps, double kaiser_beta, vector<float> &vkaiser )
+{
+
+vkaiser.resize( ntaps );
+
+double denom = std::cyl_bessel_i( 0.0, kaiser_beta );
+
+for( int n = 0; n < ntaps; n++ )
+	{
+	double x = ( 2.0 * n ) / ( ntaps - 1.0 ) - 1.0;
+
+	double arg = kaiser_beta * sqrt( 1.0 - x * x );
+
+	vkaiser[ n ] = std::cyl_bessel_i( 0.0, arg ) / denom;
+	}
+}
+
+
+
+
+
+//refer: https://www.dsprelated.com/showarticle/1113.php
+//try 'kaiser_beta' = 6
+void window_kaiser_double( int ntaps, double kaiser_beta, vector<double> &vkaiser )
+{
+
+vkaiser.resize( ntaps );
+
+double denom = std::cyl_bessel_i( 0.0, kaiser_beta );
+
+for( int n = 0; n < ntaps; n++ )
+	{
+	double x = ( 2.0 * n ) / ( ntaps - 1.0 ) - 1.0;
+
+	double arg = kaiser_beta * sqrt( 1.0 - x * x );
+
+	vkaiser[ n ] = std::cyl_bessel_i( 0.0, arg ) / denom;
+	}
+}
+
+
+
+
+
+//refer: https://www.dsprelated.com/showarticle/1113.php
+//'odd_tap_cnt ' must be odd
+//center of is 0.5
+//NOTE: odd indexed coeffs (1,3,5...) are zero, this reduces fir macs by half when decimating
+void make_halfband_coeffs_float( unsigned int odd_tap_cnt, vector<float> &vcef )
+{
+vcef.clear();
+
+if( !(odd_tap_cnt%2) )
+	{
+	odd_tap_cnt++;
+	printf("make_halfband_coeffs() - adding a tap to keep tap count odd, taps: %d\n", odd_tap_cnt );
+	}
+
+double kaiser_beta = 6;
+vector<double> vkaiser;
+filter_code::window_kaiser_double( odd_tap_cnt, kaiser_beta, vkaiser );
+
+for( int i = 0; i < odd_tap_cnt; i++ )
+	{
+	double N = odd_tap_cnt - 1;
+	double n = -((double)N)/2.0 + i;
+	double d0 = sin(n * M_PI/2.0 )/( n*M_PI + std::numeric_limits<double>::epsilon() );	//sinc
+	
+	d0 *= vkaiser[i];													//apply kaiser wnd
+	if( i == odd_tap_cnt/ 2 ) d0 = 0.5;									//for middle sample force to 0.5, this is the limit of: sin(πn/2)​/πn 
+	vcef.push_back( d0 );
+	}
+
+/* //octave code
+N= ntaps-1;
+n= -N/2:N/2;
+sinc= sin(n*pi/2)./(n*pi+eps);      % truncated impulse response; eps= 2E-16
+sinc(N/2 +1)= 1/2;                  % value for n = 0, force it to 0.5
+win= kaiser(ntaps,6);               % window function
+b= sinc.*win';                      % apply window function
+*/
+}
+
+
+
+
+
+
+
+
+
+
+//refer: https://www.dsprelated.com/showarticle/1113.php
+//'odd_tap_cnt ' must be odd
+//center of is 0.5
+//NOTE: odd indexed coeffs (1,3,5...) are zero, this reduces fir macs by half when decimating
+void make_halfband_coeffs_double( unsigned int odd_tap_cnt, vector<double> &vcef )
+{
+vcef.clear();
+
+if( !(odd_tap_cnt%2) )
+	{
+	odd_tap_cnt++;
+	printf("make_halfband_coeffs() - adding a tap to keep tap count odd, taps: %d\n", odd_tap_cnt );
+	}
+
+double kaiser_beta = 6;
+vector<double> vkaiser;
+filter_code::window_kaiser_double( odd_tap_cnt, kaiser_beta, vkaiser );
+
+for( int i = 0; i < odd_tap_cnt; i++ )
+	{
+	double N = odd_tap_cnt - 1;
+	double n = -((double)N)/2.0 + i;
+	double d0 = sin(n * M_PI/2.0 )/( n*M_PI + std::numeric_limits<double>::epsilon() );	//sinc
+	
+	d0 *= vkaiser[i];													//apply kaiser wnd
+	if( i == odd_tap_cnt/ 2 ) d0 = 0.5;									//for middle sample force to 0.5, this is the limit of: sin(πn/2)​/πn 
+	vcef.push_back( d0 );
+	}
+
+/* //octave code
+N= ntaps-1;
+n= -N/2:N/2;
+sinc= sin(n*pi/2)./(n*pi+eps);      % truncated impulse response; eps= 2E-16
+sinc(N/2 +1)= 1/2;                  % value for n = 0, force it to 0.5
+win= kaiser(ntaps,6);               % window function
+b= sinc.*win';                      % apply window function
+*/
+}
+
+
+
+
+
+
+
+
+
+//this code is NOT optimised, refer: ..MyPrj/polyphase_0_dwnsampler/
+//'cin[]' holds input samples, it expects 'cin' 'phase_cnt * phase_tap_cnt' worth of samples from prev call at its head to allow repeated call continuity,
+//ie. it accesses samples in the past so 'cin' should NOT be at the head of your sample block
+//'phase_cnt' is the downsampler factor
+//'phase_tap_cnt' number of taps per phase, i.e. ( 'vpolycoeff.size()' / 'phase_cnt' )
+//'insize' is how many input samples to process in this call
+//the input data index is inc'd by 'phase_cnt' count after all phases are processed only if 'insize' is a  multiple of 'phase_cnt'
+//'vpolycoeff' filter coeffs (designed for input srate) in normal linear ordering (does not need a banked layout), it must be 'phase_cnt * phase_tap_size' in length
+void polyphase_filter_downsampler_complex( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt )
+{
+bool vb = 0;
+
+vcout.clear();
+
+if( insize < (phase_cnt * phase_tap_cnt ) )
+	{
+	printf( "polyphase_filter_downsampler_complex() - insize %d is too small, need min of %d\n", insize, phase_cnt * phase_tap_cnt );
+	return;	
+	}
+
+//if( vcin.size() == 0 )
+//	{
+//	printf( "frme_polyphase() - vcin.size() is zero \n" );
+//	return;
+//	}
+
+
+
+
+if(vb)printf( "polyphase_filter_downsampler_complex() - insize %d\n", insize );
+if(vb)printf( "polyphase_filter_downsampler_complex() - phase_cnt %d\n", phase_cnt );
+if(vb)printf( "polyphase_filter_downsampler_complex() - phase_tap_cnt %d\n", phase_tap_cnt );
+if(vb)printf( "\n" );
+
+int ii = 0;
+int loop_cnt = 0;
+//while( ii <= (insize-M) )
+for( int ii = 0; ii < insize; ii += phase_cnt )							//move fwd in 'cin[]' after all phase coeffs have been convovled with past samples
+	{
+	float sum0 = 0.0f;
+	int jj = 0;
+	for( int phas = 0; phas < phase_cnt; phas++ )						//cycle phase/banks and apply filter coeffs (note last phase/bank is accessed first in code below)
+		{
+		float f0;
+		for( int tap = 0; tap < phase_tap_cnt; tap++ )					//cycle coeffs in cur phase bank and convolve
+			{
+			int cin_idx = ii - tap*phase_cnt - phas;					//use a prev input sample for each successive phase bank
+			f0 = cin[ cin_idx ].real;
+
+
+			int coeff_idx = tap*phase_cnt + phas; 						//
+
+			sum0 += f0 * vpolycoeff[ coeff_idx ];
+if(vb)printf( "polyphase_filter_downsampler_complex() - %02d: in[%03d] phas %02d tap %02d  coef[%03d] %f   out[%04d]\n", jj, cin_idx, phas, tap, coeff_idx, vpolycoeff[ coeff_idx ], (int)vcout.size()  );
+			jj++;
+			}
+		 if(vb)printf( "polyphase_filter_downsampler_complex()\n" );
+		}
+
+	if(vb)printf( "----------\n");
+	filter_code::st_cplex_float_tag oc;									//store o/p sample (at downsample rate)
+	oc.real = sum0;
+	oc.imag = 0.0f;
+	vcout.push_back( oc );
+
+//	ii += M;
+//	if( ii >= insize ) break;
+
+loop_cnt++;
+//if( loop_cnt == 4 ) getchar();
+//if( ii == 2 ) getchar();
+	}
+
+
+if(vb)printf( "polyphase_filter_downsampler_complex() - insize %d\n", insize );
+
+if(vb)printf( "polyphase_filter_downsampler_complex() - vcout.size() %d\n", (int)vcout.size() );
+}
+
+
+
+
+
+
+
+
+
+
+
+//this code is NOT optimised, refer: ..MyPrj/polyphase_1_channelizer/
+//creates 'phase_cnt' worth of data suitable to be fed into a fwd fft, the fft would then create 'phase_cnt' number of baseband channels which are band limited by the filter impulse response in 'vpolycoeff'
+//'phase_cnt' is the number of phase to use, it is also the downsample factor
+//'phase_tap_cnt' is the number of filter coeffs (taps) in a phase
+//'vpolycoeff.size()' needs to be of length: 'phase_cnt' * 'phase_tap_cnt', the coeffs are in normal linear ordering (does not need a banked layout)
+//'vpolycoeff' impulse response is calculating using the input srate (not the downsampled srate)
+//'*cin' points to input samples, make sure it's avdvanced by at least 'phase_cnt' * 'phase_tap_cnt' samples as,
+//this ptr is accessed in a decrementing order, you need at least 'phase_cnt' * 'phase_tap_cnt' number of samples to preceed 'cin[]' (i.e. including 'cin[0]')
+
+//'insize' is how many input samples to process in this call, make sure this value is either 'phase_cnt' or a multiple of this
+//the internal input data index is inc'd at 'phase_cnt' steps after all phases are processed only if 'insize' is a  multiple of 'phase_cnt'
+//'vcout[]' holds the output of each phase nad be of length: 'phase_cnt'
+//NOTE this code is DIFFERENT to a polyphase downsampler in that the 'data out' is picked off after each phase is processed, it is NOT the sum of all the phases as in a downsampler
+
+//example 
+//assuming input srate: 2496000
+//'phase_cnt': 512
+//'phase_tap_cnt': 10
+//'vpolycoeff.size()' = 5120, the impulse response is a lowpass filter giving a bw of 4.875 kHz (Has a −6 dB point around ±2.44 kHz)
+//an input 1MHz sinewave appears in fft bin 205 (if you are displaying fft bins with bin 255 as 0Hz, then 1MHz sine appears in the minus part of spectrum at bin 50)
+
+void polyphase_filter_downsampler_for_fft( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt )
+{
+bool vb = 0;
+
+vcout.clear();
+//vphaseIQ0.clear();
+
+//if( insize < (dwnsample_factor * phase_tap_size ) )
+//	{
+//	printf( "frme_polyphase_filter_for_fft() - insize %d is too small, need min of %d\n", insize, dwnsample_factor * phase_tap_size );
+//	return;	
+//	}
+
+//if( vcin.size() == 0 )
+//	{
+//	printf( "frme_polyphase_filter_for_fft() - vcin.size() is zero \n" );
+//	return;
+//	}
+
+
+unsigned int M = phase_cnt;												//e.g: 48000-->8000 = 6
+
+
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - insize %d\n", insize );
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - phase_cnt %d\n", phase_cnt );
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - phase_tap_cnt %d\n", phase_tap_cnt );
+if(vb)printf( "\n" );
+
+int ii = 0;
+int loop_cnt = 0;
+//while( ii <= (insize-M) )
+
+//getchar();
+
+int idx_min = 0;
+int idx_max = 0;
+
+int last_idx = 0;
+
+
+for( int ii = 0; ii < insize; ii += phase_cnt )									//move fwd in 'cin[]' after all phase coeffs have been convovled with past samples
+	{
+	int jj = 0;
+	for( int phas = 0; phas < phase_cnt; phas++ )						//cycle phase/banks and apply filter coeffs (note last phase/bank is accessed first in code below)
+		{
+		float sum0 = 0.0f;
+		float sum1 = 0.0f;
+		float f0;
+		float f1;
+		for( int tap = 0; tap < phase_tap_cnt; tap++ )					//cycle coeffs in cur phase bank and convolve
+			{
+			int cin_idx = ii - tap*phase_cnt - phas;					//use a prev input sample for each successive phase bank
+
+if( cin_idx < idx_min ) idx_min = cin_idx;
+if( cin_idx > idx_max ) idx_max = cin_idx;
+
+			f0 = cin[ cin_idx ].real;
+			f1 = cin[ cin_idx ].imag;
+
+last_idx = cin_idx;
+
+			int coeff_idx = tap*phase_cnt + phas; 						//
+
+			float phas0 = f0 * vpolycoeff[ coeff_idx ];
+			float phas1 = f1 * vpolycoeff[ coeff_idx ];
+			
+//			if( phas == phase_monitor )
+//				{
+//				filter_code::st_cplex_float_tag oc;
+
+//				oc.real = phas0;
+//				oc.imag = phas1;
+//				vchanIQ0.push_back( oc );
+//				}
+				
+			
+			sum0 += phas0;
+			sum1 += phas1;
+
+			if(vb)printf( "polyphase_filter_downsampler_for_fft() - %02d: in[%03d]  phas %02d tap %02d  coef[%03d] %f   out[%04d]\n", jj, cin_idx, phas, tap, coeff_idx, vpolycoeff[ coeff_idx ], (int)vcout.size()  );
+			jj++;
+
+//			idbg0++;
+//			if( idbg0 >= phase_cnt )idbg0 = 0;			
+			}
+		
+		 if(vb)printf( "polyphase_filter_downsampler_for_fft()\n" );
+		 
+		if(vb)printf( "----------\n");
+		
+		filter_code::st_cplex_float_tag oc;									//store the processed phase resultant sample for fft to use elsewhere
+		oc.real = sum0;
+		oc.imag = sum1;
+		vcout.push_back( oc );
+		}
+		
+		
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - last_idx %d  ii %d\n", last_idx, ii );
+
+//getchar();
+
+//	ii += M;
+//	if( ii >= insize ) break;
+
+loop_cnt++;
+//if( loop_cnt == 4 ) getchar();
+//if( ii == 2 ) getchar();
+	}
+
+
+//if(vb)printf( "polyphase_filter_downsampler_for_fft() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - vcout.size() %d\n", (int)vcout.size() );
+
+//if(1)printf( "polyphase_filter_downsampler_for_fft() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_downsampler_for_fft() - idx_min %d %d  \n", idx_min, idx_max );
+//getchar();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//this code is NOT optimised, REFER prj: 'polyphase_2_dsbsc_ssb/' for usage
+//upsamples data in 'cin' by factor: 'phase_cnt'
+//coded for streaming purposes, therefore requires samples from the past as described for 'cin' below,
+//'phase_cnt' is the number of phase to use, it is also the upsample factor,
+//'phase_tap_cnt' is the number of filter coeffs (taps) in a phase,
+//'vpolycoeff.size()' needs to be of length: 'phase_cnt' * 'phase_tap_cnt', the coeffs are in normal linear ordering (does not need a banked layout),
+//'vpolycoeff' impulse response is calculating using the input srate (not the upsampled srate),
+//'*cin' points to input samples, make sure it's avdanced by at least 'phase_cnt' samples,
+//i.e. this ptr is accessed in a decrementing order (as well as incrementing order if 'insize' is > 1), you NEED at least 'phase_tap_cnt' number of samples to preceed '*cin' (i.e. including 'cin[0]')
+
+//'insize' is how many fwd input samples to process in this call, make sure 'cin[]' has this many sample from of 'cin[0]' and onwards i.e. 1 means the newest and last sample accessed is 'cin[0]', 2 likewise means 'cin[1]' is last sample required
+//NOTE: the internal input data index is inc'd by 1 after all phases are processed (if 'insize' > 1)
+//'vcout[]' holds the upsampled data and its length becomes: 'phase_cnt' * 'insize'
+
+//example 
+//assuming input srate: 48000Hz
+//'cin[]' points to input sample, make SURE there is 'phase_tap_cnt' samples preceeding 'cin[]' (i.e. including 'cin[0]')
+//'insize' = 1	means cin[0] is the lastest sample, 2 means 'cin[1]' is a future sample (2 will produce 80 samples in 'vout')
+//'phase_cnt': 40
+//'phase_tap_cnt': 16
+//'vpolycoeff.size()' = 640, the impulse response is a lowpass filter
+//'vout' receives 40 samples, at srate of 1920000Hz
+void polyphase_filter_upsampler_complex( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt, bool correct_gain )
+{
+bool vb = 0;
+
+vcout.clear();
+
+
+
+
+if(vb)printf( "polyphase_filter_upsampler_complex() - insize %d\n", insize );
+if(vb)printf( "polyphase_filter_upsampler_complex() - phase_cnt %d\n", phase_cnt );
+if(vb)printf( "polyphase_filter_upsampler_complex() - phase_tap_cnt %d\n", phase_tap_cnt );
+if(vb)printf( "\n" );
+
+//int ii = 0;
+//int loop_cnt = 0;
+//while( ii <= (insize-M) )
+
+//getchar();
+
+int idx_min = 0;
+int idx_max = 0;
+
+//int last_idx = 0;
+
+
+for( int ii = 0; ii < insize; ii += 1 )									//move fwd in 'cin[]' after all phase coeffs have been convovled with past samples
+	{
+	int jj = 0;
+	for( int phas = 0; phas < phase_cnt; phas++ )						//cycle phase/banks and apply filter coeffs (note last phase/bank is accessed first in code below)
+		{
+		float sum0 = 0.0f;
+		float sum1 = 0.0f;
+		float f0;
+		float f1;
+		for( int tap = 0; tap < phase_tap_cnt; tap++ )					//cycle coeffs in cur phase bank and convolve
+			{
+			int cin_idx = ii - tap;										//use a prev input sample for each successive phase bank
+
+//if( cin_idx < idx_min ) idx_min = cin_idx;
+//if( cin_idx > idx_max ) idx_max = cin_idx;
+
+			f0 = cin[ cin_idx ].real;
+			f1 = cin[ cin_idx ].imag;
+
+//last_idx = cin_idx;
+
+			int coeff_idx = tap*phase_cnt + phas; 						//
+
+			float phas0 = f0 * vpolycoeff[ coeff_idx ];
+			float phas1 = f1 * vpolycoeff[ coeff_idx ];
+
+//if( phas0 > 10 ) 
+//	{
+//if(vb)printf( "polyphase_filter_upsampler_complex() - phas0 sum %f    f0[%d] %f  coeff[%d] %f\n", phas0, f0, cin_idx, coeff_idx, vpolycoeff[ coeff_idx ] );
+//	getchar();
+//	}
+
+//			if( phas == phase_monitor )
+//				{
+//				filter_code::st_cplex_float_tag oc;
+
+//				oc.real = phas0;
+//				oc.imag = phas1;
+//				vchanIQ0.push_back( oc );
+//				}
+				
+			sum0 += phas0;
+			sum1 += phas1;
+
+			if(vb)printf( "polyphase_filter_upsampler_complex() - %02d: in[%03d]  phas %02d tap %02d  coef[%03d] %f   out[%04d]\n", jj, cin_idx, phas, tap, coeff_idx, vpolycoeff[ coeff_idx ], (int)vcout.size()  );
+			jj++;
+
+//			idbg0++;
+//			if( idbg0 >= phase_cnt )idbg0 = 0;			
+			}
+//getchar();		
+//		 if(vb)printf( "polyphase_filter_upsampler_complex()\n" );
+		 
+		if(vb)printf( "----------\n");
+		
+		filter_code::st_cplex_float_tag oc;									//store the processed phase resultant sample for fft to use elsewhere
+		oc.real = sum0;
+		oc.imag = sum1;
+		vcout.push_back( oc );
+		}
+		
+		
+//if(vb)printf( "polyphase_filter_upsampler_complex() - last_idx %d  ii %d\n", last_idx, ii );
+
+//getchar();
+
+//	ii += M;
+//	if( ii >= insize ) break;
+
+//loop_cnt++;
+//if( loop_cnt == 4 ) getchar();
+//if( ii == 2 ) getchar();
+	}
+
+
+//if(vb)printf( "polyphase_filter_upsampler_complex() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_upsampler_complex() - vcout.size() %d\n", (int)vcout.size() );
+
+//if(1)printf( "polyphase_filter_upsampler_complex() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_upsampler_complex() - idx_min %d %d  \n", idx_min, idx_max );
+//getchar();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+//this code is NOT optimised, REFER prj: 'polyphase_2_dsbsc_ssb/' for usage
+//upsamples data in 'vcin' by factor: 'phase_cnt'
+//code requires samples from the past, so will load zeros till 'phase_tap_cnt' num samples in 'vcin[]' is reached,
+//'phase_cnt' is the number of phase to use, it is also the upsample factor,
+//'phase_tap_cnt' is the number of filter coeffs (taps) in a phase,
+//'vpolycoeff.size()' needs to be of length: 'phase_cnt' * 'phase_tap_cnt', the coeffs are in normal linear ordering (does not need a banked layout),
+//'vpolycoeff' impulse response is calculating using the input srate (not the upsampled srate),
+//'vcin' holds to input samples, make sure has at least 'phase_tap_cnt' samples in it
+// vcout' is loaded with this amount of samples: ( 'vcin.size()' - 'phase_tap_cnt' + 1 ) * 'phase_cnt'
+//returns 1 on success, else 0
+ 
+//example 
+//assuming input srate: 48000Hz
+// 'vcin' has 'phase_tap_cnt' number of samples (minimum num, ensures convolution is not starved of input samples)
+//'phase_cnt': 40
+//'phase_tap_cnt': 16
+//'vpolycoeff.size()' = 640, the impulse response is a lowpass filter (at input srate)
+//'vout' receives 40 samples, at srate of 1920000Hz
+bool polyphase_filter_upsampler_complex_vector( vector<filter_code::st_cplex_float_tag> &vcin, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt, bool correct_gain )
+{
+bool vb = 0;
+
+vcout.clear();
+
+
+if( vcin.size() < phase_tap_cnt )
+	{
+	printf( "polyphase_filter_upsampler_complex_vector() - insufficient input data, min count is 'phase_tap_cnt' %d, vcin.size() was: %d\n", (int)vcin.size(), phase_tap_cnt );
+	return 0;
+	}
+
+if(vb)printf( "polyphase_filter_upsampler_complex_vector() - vcin.size( %d\n", (int)vcin.size() );
+if(vb)printf( "polyphase_filter_upsampler_complex_vector() - phase_cnt %d\n", phase_cnt );
+if(vb)printf( "polyphase_filter_upsampler_complex_vector() - phase_tap_cnt %d\n", phase_tap_cnt );
+if(vb)printf( "\n" );
+
+//int ii = 0;
+//int loop_cnt = 0;
+//while( ii <= (insize-M) )
+
+//getchar();
+
+int idx_min = 0;
+int idx_max = 0;
+
+//int last_idx = 0;
+
+
+int insize = vcin.size() - phase_tap_cnt;
+
+for( int ii = 0; ii <= insize; ii++ )									//move fwd in 'vcin[]' after all phase coeffs have been convovled with past samples
+	{
+	int jj = 0;
+	for( int phas = 0; phas < phase_cnt; phas++ )						//cycle phase/banks and apply filter coeffs (note last phase/bank is accessed first in code below)
+		{
+		float sum0 = 0.0f;
+		float sum1 = 0.0f;
+		float f0 = 0;
+		float f1 = 0;
+		for( int tap = 0; tap < phase_tap_cnt; tap++ )					//cycle coeffs in cur phase bank and convolve
+			{
+			int in_idx = ii - tap;										//use a prev input sample for each successive phase bank
+
+			
+//if( cin_idx < idx_min ) idx_min = cin_idx;
+//if( cin_idx > idx_max ) idx_max = cin_idx;
+
+			if( in_idx < 0 )
+				{
+				sum0 = 0;
+				sum0 = 0;
+				}
+			else{
+				f0 = vcin[ in_idx ].real;
+				f1 = vcin[ in_idx ].imag;
+//last_idx = cin_idx;
+
+				int coeff_idx = tap*phase_cnt + phas; 						//
+
+				float phas0 = f0 * vpolycoeff[ coeff_idx ];
+				float phas1 = f1 * vpolycoeff[ coeff_idx ];
+
+				sum0 += phas0;
+				sum1 += phas1;
+				if(vb)printf( "polyphase_filter_upsampler_complex_vector() - %02d: in[%03d]  phas %02d tap %02d  coef[%03d] %f   out[%04d]\n", jj, in_idx, phas, tap, coeff_idx, vpolycoeff[ coeff_idx ], (int)vcout.size()  );
+				}
+
+			jj++;
+
+//			idbg0++;
+//			if( idbg0 >= phase_cnt )idbg0 = 0;			
+			}
+//getchar();		
+//		 if(vb)printf( "polyphase_filter_upsampler_complex_vector()\n" );
+		 
+		if(vb)printf( "----------\n");
+		
+		filter_code::st_cplex_float_tag oc;									//store the processed phase resultant sample for fft to use elsewhere
+		oc.real = sum0;
+		oc.imag = sum1;
+		vcout.push_back( oc );
+		}
+
+		
+//if(vb)printf( "polyphase_filter_upsampler_complex_vector() - last_idx %d  ii %d\n", last_idx, ii );
+
+//getchar();
+
+//	ii += M;
+//	if( ii >= insize ) break;
+
+//loop_cnt++;
+//if( loop_cnt == 4 ) getchar();
+//if( ii == 2 ) getchar();
+	}
+
+
+//if(vb)printf( "polyphase_filter_upsampler_complex_vector() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_upsampler_complex_vector() - vcout.size() %d\n", (int)vcout.size() );
+
+//if(1)printf( "polyphase_filter_upsampler_complex_vector() - insize %d vcout.size() %d  vchanIQ0 %d  \n", insize, (int)vcout.size(), (int)vchanIQ0.size() );
+
+if(vb)printf( "polyphase_filter_upsampler_complex_vector() - idx_min %d %d  \n", idx_min, idx_max );
+//getchar();
+
+return 1;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}		//namespace 'filter_code'
 
 
 

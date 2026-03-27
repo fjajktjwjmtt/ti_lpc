@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //audio_formats.h
 //v1.05	---- 05-jun-2017
-//v1.08
+//v1.10
 
 //!! see usage examples in 'audio_formats.cpp'
    
@@ -291,6 +291,7 @@ bool sample_buf_load_flts_malloc( st_audio_formats_tag &af, flts* fltsbuf, unsig
 bool make_tone( double amp0, double freq0, double phase0, double amp1, double freq1, double phase1, double dur, st_audio_formats_tag &af );
 bool srate_change( st_audio_formats_tag &afout );
 bool normalise( double max_val, st_audio_formats_tag &af );
+bool normalise_malloc( double max_val);									//v1.09, v1.10
 bool find_file_format( string path, string fname, en_audio_formats &fmt );
 
 bool push_ch0( double dd );
@@ -338,6 +339,7 @@ int load_aiff_malloc( string path, string fname, int scale_down_by_peak_int_val,
 bool save_aiff( string path, string fname, int peak_int_val, st_audio_formats_tag &af );
 bool save_aiff_malloc( string path, string fname, int peak_int_val, st_audio_formats_tag &af );
 bool find_in_file( FILE *fp, string fname, unsigned int &found_at_pos );
+
 
 
 

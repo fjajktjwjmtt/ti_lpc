@@ -198,7 +198,7 @@ int dbgcnt = 0;
 
 void cb_gph0_mousewheel( void*, int int0 )
 {
-printf("gph0_scaley0: %f\n", gph0_scaley0);
+//printf("gph0_scaley0: %f\n", gph0_scaley0);
 
 if( gph0_keyx )
 	{

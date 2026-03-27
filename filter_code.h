@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2025 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //filter_code.h
-//v1.07
+//v1.15
 
 #ifndef filter_code_h
 #define filter_code_h
@@ -29,11 +29,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <math.h>
 #include <vector>
 #include <complex>
+#include <cmath>														//for std::cyl_bessel_i();
 
 //#include "globals.h"					//v1.06
 #include "GCProfile.h"
 //#include "mgraph.h"					//v1.06
-#include "audio_formats.h"
+//#include "audio_formats.h"
 
 
 using namespace std;
@@ -45,6 +46,10 @@ using namespace std;
 
 namespace filter_code
 	{
+		
+//	extern double kaiser_alpha;
+	extern double kaiser_beta;											//v1.15
+	
 	enum en_filter_pass_type_tag
 	{
 	fpt_undefined,
@@ -73,7 +78,7 @@ namespace filter_code
 	{
 	fwt_undefined,
 	fwt_rect,
-	fwt_kaiser,                     //not yet supported
+	fwt_kaiser,                     // ADJUST ALSO as req: 'kaiser_beta'
 	fwt_bartlett,
 	fwt_hann,
 	fwt_bartlett_hanning,
@@ -92,12 +97,55 @@ namespace filter_code
 
 
 
-
 	struct st_cplex_tag
 	{
 	double real;
 	double imag;
+
+    //conjugate
+    st_cplex_tag conj() const											//v1.13
+		{
+		return { real, -imag };
+		}
+
+    //complex multiply
+    st_cplex_tag operator*(const st_cplex_tag& rhs) const
+		{
+		return 
+			{
+			real * rhs.real - imag * rhs.imag,
+			real * rhs.imag + imag * rhs.real
+			};
+		}
 	};
+
+
+
+
+
+	struct st_cplex_float_tag
+	{
+	float real;
+	float imag;
+
+    //conjugate
+    st_cplex_float_tag conj() const										//v1.13
+		{
+		return { real, -imag };
+		}
+
+    //complex multiply
+    st_cplex_float_tag operator*(const st_cplex_float_tag& rhs) const
+		{
+		return 
+			{
+			real * rhs.real - imag * rhs.imag,
+			real * rhs.imag + imag * rhs.real
+			};
+		}
+	};
+
+
 
 
 
@@ -120,13 +168,20 @@ namespace filter_code
 
 
 
-
 	//v1.03, see also, see also 'st_iir_2nd_order_tag'
 	typedef struct
 	{
+	bool verb;															//verbose for debugging, v1.07
+	string suser0;														//user string for debugging	v1.07
+	string suser1;
+	int user_id0;														//user num storage v1.07
+	int user_id1;
+
+	bool bypass;
+
 	bool created;
 	int coeff_cnt;
-	double *coeff_ptr;
+//	double *coeff_ptr;													//v1.07
 
 	double a1, a2;
 	double b0, b1, b2;
@@ -134,9 +189,14 @@ namespace filter_code
 	double dly0;
 	double dly1;
 
-	bool bypass;
 
 	} st_iir;
+
+
+
+
+
+
 
 
 
@@ -145,10 +205,15 @@ namespace filter_code
 	//v1.02, see also 'st_iir'
 	struct st_iir_2nd_order_tag
 	{
+	bool verb;															//verbose for debugging, v1.06
+	string suser0;														//user string for debugging	v1.08
+	string suser1;
+	int user_id0;														//user num storage
+	int user_id1;
 	bool bypass;
-	float coeff[5];															//a1, a2, b0, b1, b2
-	float delay0[2];														//for ch0
-	float delay1[2];														//for ch1
+	float coeff[5];														//a1, a2, b0, b1, b2
+	float delay0[2];													//for ch0
+	float delay1[2];													//for ch1
 	};
 
 
@@ -170,6 +235,7 @@ namespace filter_code
 	//double fir_out_inline_4( st_fir &fir );
 	//double fir_out_inline_8( st_fir &fir );
 	bool create_filter_from_coeffs( st_fir &fir, vector<double> &vcoeff );
+	bool create_iir_filter_from_coeffs_b0_first( st_iir &iir, vector<double> &vcoeff );
 	void delete_filter( st_fir &fir );
 
 	bool create_filter_from_string( st_fir &fir, string scoeff );
@@ -185,8 +251,33 @@ namespace filter_code
 	double iir_process( st_iir &iir, double in ); //v1.03	//NOTE this is SIMILAR to 'filter_iir_2nd_order()'
 	void create_filter_iir_using_q( filter_code::en_filter_pass_type_tag filt_type, float filt_freq_in, float filt_q_in, int srate_in, filter_code::st_iir_2nd_order_tag &iir );
 
+	int factorial( int n ); 											//v1.08
+	float kaiser_Io( float x );											//v1.08
 
-	}	//namespace bmp_code
+	bool window_calc_and_apply_float( en_filter_window_type_tag wnd_type, vector<float> &vsmpl, vector<float> &vwnd );	//v1.08
+	bool window_function_float( en_filter_window_type_tag wnd_type, unsigned len, vector<float> &vwnd );				//v1.08
+
+	bool load_coeffs_from_file_float( string fname, vector<float> &vcoeff );			//v1.10
+	bool load_coeffs_from_file_double( string fname, vector<double> &vcoeff );			//v1.10
+
+	void polyphase_filter_downsampler_complex( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt );
+	void polyphase_filter_downsampler_for_fft( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt );
+	void polyphase_filter_upsampler_complex( filter_code::st_cplex_float_tag *cin, unsigned int insize, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt, bool correct_gain );
+	bool polyphase_filter_upsampler_complex_vector( vector<filter_code::st_cplex_float_tag> &vcin, vector<filter_code::st_cplex_float_tag> &vcout, vector<float> &vpolycoeff, unsigned int phase_cnt, unsigned int phase_tap_cnt, bool correct_gain );
+	bool load_coeffs_from_string_float( string scoeff, vector<double> &vcoeff );
+	bool load_coeffs_from_string_double( string scoeff, vector<double> &vcoeff );
+	bool save_coeffs_vector_float( string fname, vector<float> &vcoeff );
+	bool save_coeffs_vector_double( string fname, vector<double> &vcoeff );
+	void make_string_from_coeffs_float( vector<float>vcef, string &sout );
+	void make_string_from_coeffs_double( vector<double>vcef, string &sout );
+	void window_kaiser_float( int ntaps, double kaiser_beta, vector<float> &vkaiser );
+	void window_kaiser_double( int ntaps, double kaiser_beta, vector<double> &vkaiser );
+	void make_halfband_coeffs_float( unsigned int odd_tap_cnt, vector<float> &vcef );
+	void make_halfband_coeffs_double( unsigned int odd_tap_cnt, vector<double> &vcef );
+
+
+
+	}	//namespace 'filter_code'
 
 
 

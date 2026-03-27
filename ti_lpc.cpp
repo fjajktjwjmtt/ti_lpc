@@ -27,8 +27,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.06		22-jul-2023			//moded for namespace 'filter_code::'
 //v1.07		18-sep-2023			//moded for namespace 'gc_srateconv::'
 //v1.08		27-aug-2024			//added .au audio file select dialog via button, refer: 'select_au_file()'  'slast_au_filename'
-
-
+//v1.09		27-mar-2026			//added call to newer 'fast_mgraph' function 'fgph.fit_plot(0)'		
+								//added 'sanitise' button, refer 'cb_bt_sanitise_dlg_actual()'
+								//added 'whisper' checkbox, refer 'b_whisper'
 
 #include "ti_lpc.h"
 
@@ -66,6 +67,7 @@ Fl_Double_Window* wndMain;
 PrefWnd* pref_wnd=0;
 PrefWnd* font_pref_wnd=0;
 GCLed *led_addr_step0;
+fast_mgraph fgph;
 
 //Fl_Value_Slider *fvs_aud_gain;
 string csIniFilename;
@@ -164,7 +166,7 @@ float frame_time = 25e-3;
 
 int generated_samp_cnt = 0;
 
-double twopi = 2.0 * M_PI;
+//double twopi = 2.0 * M_PI;											//v1.09, removed
 
 
 
@@ -190,6 +192,7 @@ float chirp_step;
 
 Talkie talk;
 bool bperiod_6bits = 0;
+bool b_whisper = 0;
 
 
 uint8_t *vsm = 0;											//holds a voice synth memory rom 
@@ -225,6 +228,7 @@ void cb_open_audio_editor(Fl_Widget *, void *);
 void cb_bt_quit(Fl_Widget *, void *);
 void cb_open_file(Fl_Widget *, void *);
 void cb_save_file(Fl_Widget *, void *);
+void cb_menu_window( Fl_Widget *w, void *v );
 
 
 
@@ -339,6 +343,10 @@ Fl_Menu_Item menuitems[] =
 		{ 0 },
 #endif
 
+	{ "&Window", 0, 0, 0, FL_SUBMENU },
+		{ "&Show pc audio graph",  0, (Fl_Callback *)cb_menu_window, (void*) 0},
+		{ 0 },
+
 	{ "&Help", 0, 0, 0, FL_SUBMENU },
 		{ "'help.txt'", 0				, (Fl_Callback *)cb_help, 0, FL_MENU_DIVIDER  },
 		{ "&About", 0				, (Fl_Callback *)cb_btAbout, 0 },
@@ -355,6 +363,25 @@ Fl_Menu_Item menuitems[] =
 
 
 
+
+
+
+
+void cb_menu_window( Fl_Widget *w, void *v )
+{
+string s1;
+mystr m1;
+
+int which = (intptr_t)v;
+
+printf("cb_menu_window() - which %d\n", which );
+
+if( which == 0 )
+	{
+	fgph.hide();
+	fgph.show();
+	}
+}
 
 
 
@@ -711,6 +738,216 @@ return Fl_Text_Editor::handle(e);
 //----------------------------------------------------------
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//----------------------------------------------------------
+
+mytexteditor3::mytexteditor3( int X, int Y, int W, int H, const char* l = 0 ) : Fl_Text_Editor( X, Y, W, H, l )
+{
+left_button = 0;
+wstart = 0;
+wend = 0;
+
+id0 = 0;
+}
+
+
+
+
+int mytexteditor3::handle( int e )
+{
+string s1, s_addr;
+
+bool need_redraw = 0;
+bool dont_pass_on = 0;
+
+/*
+if ( e == FL_MOVE)
+	{
+//	if( left_button )
+		{
+		if( ( wstart ) | ( wend ) )
+			{
+			buffer()->select( wstart, wend );
+
+			s1 = buffer()->selection_text();
+
+			double dd;
+			sscanf( s1.c_str(), "%lf", &dd );
+	printf("text num: '%s', num: %.17e\n", s1.c_str(), dd );
+
+	//		((mywnd*)parent())->paste_num( dd );
+			((mywnd*)parent())->paste_str_num( s1 );
+
+			need_redraw = 0;
+			dont_pass_on = 1;
+			}
+		}
+	}
+*/
+
+
+
+
+if ( e == FL_PUSH )
+	{
+	Fl_Text_Editor::handle( e );			//call base function now so it will process mouse click as below code needs it
+
+	if( Fl::event_button() == 1 )
+		{
+		left_button = 1;
+		}
+
+	if( Fl::event_button() == 3 )
+		{
+		wstart = 0;
+		wend = 0;
+		buffer()->highlight( wstart, wend );
+
+		int start, end;
+	//	buffer()->selection_position( &start, &end );
+
+		int cursor_pos = insert_position();
+
+		printf("mytexteditor3::handle() - te push: %d, %d, %d\n", start, end, cursor_pos );
+
+
+
+		//mouse clicked, extract h byte string
+		unsigned int addr;
+		if( buffer()->length() > 0 )
+			{
+			char cc = buffer()->char_at( cursor_pos );
+
+//			if( cc <= ' ' ) goto skip_num_extraction;		//rule out as a possible number
+//			if( cc == '\t' ) goto skip_num_extraction;
+//			if( cc > 0x7f ) goto skip_num_extraction;
+
+
+
+			int ii = 0;
+			for( ii = cursor_pos;  ii >= 0; ii-- )						//go bwrd
+				{
+				cc = buffer()->char_at( ii );
+
+				if( cc == 'a' ) continue;
+				if( cc == 'A' ) continue;
+				if( cc == 'b' ) continue;
+				if( cc == 'B' ) continue;
+				if( cc == 'c' ) continue;
+				if( cc == 'C' ) continue;
+				if( cc == 'd' ) continue;
+				if( cc == 'D' ) continue;
+				if( cc == 'e' ) continue;
+				if( cc == 'E' ) continue;
+				if( cc == 'f' ) continue;
+				if( cc == 'F' ) continue;
+				if( cc == 'x' ) continue;
+				if( cc == 'X' ) continue;
+				if( cc == ',' ) continue;
+				if( cc == ' ' ) continue;
+
+				if( ( cc >= '0' ) & ( cc <= '9' ) ) continue;
+				break;
+				}
+
+			
+			ii += 1;
+			if( ii >= buffer()->length() ) ii = buffer()->length() - 1;
+			if( ii < 0 ) ii = 0;
+
+			int istart = ii;
+			int iend = 0;
+			iend = istart + 1;
+
+			for( ii = cursor_pos;  ii < buffer()->length(); ii++ )		//go fwd
+				{
+				cc = buffer()->char_at( ii );
+	//			if( cc == '-' ) continue;
+	//			if( cc == '+' ) continue;
+	//			if( cc == '.' ) continue;
+				if( cc == 'a' ) continue;
+				if( cc == 'A' ) continue;
+				if( cc == 'b' ) continue;
+				if( cc == 'B' ) continue;
+				if( cc == 'c' ) continue;
+				if( cc == 'C' ) continue;
+				if( cc == 'd' ) continue;
+				if( cc == 'D' ) continue;
+				if( cc == 'e' ) continue;
+				if( cc == 'E' ) continue;
+				if( cc == 'f' ) continue;
+				if( cc == 'F' ) continue;
+				if( cc == 'x' ) continue;
+				if( cc == 'X' ) continue;
+				if( cc == ',' ) continue;
+				if( cc == ' ' ) continue;
+
+				if( ( cc >= '0' ) & ( cc <= '9' ) ) continue;
+				break;
+				}
+			
+			iend = ii;
+				
+			printf("mytexteditor3::handle() - istart: %d, iend %d\n", istart, iend );
+
+			buffer()->highlight( istart, iend );
+			buffer()->select( istart, iend );
+			s1 = buffer()->selection_text();
+
+			printf("mytexteditor3::handle() - str: '%s'\n", s1.c_str() );
+
+			say_lpc_str( s1 );
+			}
+
+		need_redraw = 0;
+		dont_pass_on = 1;
+		}
+
+//	need_redraw = 1;
+//	dont_pass_on = 1;			//note base function already called above
+	}
+
+
+
+if ( e == FL_RELEASE )
+	{
+	if( Fl::event_button() == 1 )
+		{
+		left_button = 0;
+		}
+
+	need_redraw = 1;
+	dont_pass_on = 1;
+	}
+
+
+
+if ( need_redraw ) redraw();
+
+
+if( dont_pass_on ) return 1;
+
+return Fl_Text_Editor::handle(e);
+
+}
+
+
+//----------------------------------------------------------
 
 
 
@@ -2112,7 +2349,7 @@ Fl_Input *teText = new Fl_Input(10,10,wnd->w()-20,wnd->h()-20,"");
 teText->type(FL_MULTILINE_OUTPUT);
 teText->textsize(12);
 
-strpf( s1, "%s,  %s,  Built: %s\n", cnsAppWndName, "v1.08", cns_build_date );
+strpf( s1, "%s,  %s,  Built: %s\n", cnsAppWndName, "v1.09", cns_build_date );
 st += s1;
 
 
@@ -2451,6 +2688,157 @@ say_lpc_str( fi_lpc_hex->value() );
 
 
 
+
+
+string sanitise_dlg_str;
+Fl_Window *wnd_sanitise_dlg = 0;
+mytexteditor3 *sanitise_dlg_te = 0;
+Fl_Text_Buffer *sanitise_dlg_tb = 0;
+
+
+void cb_t_sanitise_dlg_combo( Fl_Widget *w, void *v )
+{
+string s1;
+mystr m1;
+
+int which = (intptr_t)v;
+
+//printf( "cb_t_sanitise_dlg_cleanup() - %d\n",  which );		
+
+if( which == 0 )
+	{
+	sanitise_dlg_str = sanitise_dlg_tb->text();
+	
+	m1 = sanitise_dlg_str;
+	m1.FindReplace( s1, "{", "", 0 );
+	m1 = s1;
+	
+	m1.FindReplace( s1, "}", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, "\r", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, ";", "", 0 );
+	m1 = s1;
+
+
+	m1.FindReplace( s1, "[", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, "]", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, "\"", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, "/", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, "'", "", 0 );
+	m1 = s1;
+
+	m1.FindReplace( s1, ".", "", 0 );
+	m1 = s1;
+
+	
+	for( int i = 0; i < 100; i++ )										//repeat incase many white spaces exist
+		{
+		m1.FindReplace( s1, "  ", " ", 0 );
+		m1 = s1;
+
+		m1.FindReplace( s1, "\t", "", 0 );
+		m1 = s1;
+		}
+
+	m1.FindReplace( s1, "=", ":", 0 );									//change '=' to ':' to help locate beginnng of byte string
+	m1 = s1;
+
+	sanitise_dlg_str = s1;
+	sanitise_dlg_tb->text( sanitise_dlg_str.c_str() );
+	}
+
+
+if( which == 1 )
+	{
+	wnd_sanitise_dlg->hide();
+	}
+}
+
+
+
+
+
+void cb_bt_sanitise_dlg_actual()
+{
+string s1, st;
+mystr m1;
+
+if( wnd_sanitise_dlg == 0 ) 
+	{
+	wnd_sanitise_dlg = new Fl_Window(wndMain->x() - 40,wndMain->y() + 30, 800, 400);
+	wnd_sanitise_dlg->label("Sanitise -----> Right click on byte string to Sound (Select correct tmsxxxx chip)");
+
+	if( sanitise_dlg_tb == 0 ) sanitise_dlg_tb = new Fl_Text_Buffer;
+
+	if( sanitise_dlg_te == 0 ) sanitise_dlg_te = new mytexteditor3( 10, 10, wnd_sanitise_dlg->w()-20, wnd_sanitise_dlg->h()-40, "" );
+	sanitise_dlg_te->buffer( sanitise_dlg_tb );
+	sanitise_dlg_te->textsize(10);
+	sanitise_dlg_te->textfont(4);
+
+
+
+	Fl_Button *bt_sanitise_dlg_close = new Fl_Button( wnd_sanitise_dlg->w() - 55, wnd_sanitise_dlg->h() - 22, 50, 18, "Close" );
+	bt_sanitise_dlg_close->callback( cb_t_sanitise_dlg_combo, (void*)1 );
+
+	Fl_Button *bt_sanitise_dlg_cleanup = new Fl_Button( wnd_sanitise_dlg->w() - 145, wnd_sanitise_dlg->h() - 22, 80, 18, "CleanUp" );
+	bt_sanitise_dlg_cleanup->callback( cb_t_sanitise_dlg_combo, (void*)0 );
+	bt_sanitise_dlg_cleanup->tooltip( "remove certain c code formatting and symbols, too help isolate byte strings" );
+
+	wnd_sanitise_dlg->end();
+	wnd_sanitise_dlg->resizable(wnd_sanitise_dlg);
+
+
+	s1 = "Vocab_US_Large.ino";
+	if( !m1.readfile( s1, 1000000 ) )
+		{
+		printf( "cb_bt_sanitise_dlg_actual() - failed to open file: '%s'\n", s1.c_str() );
+
+		strpf( s1, "Click tms5220 button: - examples from:\n\nTalkie library\nCopyright 2011 Peter Knight\nThis code is released under GPLv2 license\n\n" );
+		st += s1;
+
+		strpf( s1, "uint8_t spZERO[] PROGMEM = {0x69,0xFB,0x59,0xDD,0x51,0xD5,0xD7,0xB5,0x6F,0x0A,0x78,0xC0,0x52,0x01,0x0F,0x50,0xAC,0xF6,0xA8,0x16,0x15,0xF2,0x7B,0xEA,0x19,0x47,0xD0,0x64,0xEB,0xAD,0x76,0xB5,0xEB,0xD1,0x96,0x24,0x6E,0x62,0x6D,0x5B,0x1F,0x0A,0xA7,0xB9,0xC5,0xAB,0xFD,0x1A,0x62,0xF0,0xF0,0xE2,0x6C,0x73,0x1C,0x73,0x52,0x1D,0x19,0x94,0x6F,0xCE,0x7D,0xED,0x6B,0xD9,0x82,0xDC,0x48,0xC7,0x2E,0x71,0x8B,0xBB,0xDF,0xFF,0x1F};\n" );
+		st += s1;
+		
+		strpf( s1, "//uint8_t spINFORMATION[] PROGMEM = {0xAE,0xE8,0x39,0x98,0xBC,0xD6,0x8C,0xA2,0x19,0xE5,0x98,0x98,0xB4,0x8A,0x6E,0x55,0xBC,0xA3,0xD6,0x2A,0x9B,0x36,0xF5,0xF2,0x59,0xAB,0x6C,0x96,0x2A,0x5C,0xED,0x8C,0x2A,0x2B,0xAD,0x10,0x8E,0x93,0xAA,0x6C,0xC5,0x95,0xB2,0xA1,0xEB,0x96,0x49,0x33,0x33,0xC7,0xA9,0x9F,0x2E,0x33,0x42,0x14,0x3B,0xA0,0xB9,0xF6,0x51,0x26,0x57,0x6A,0x4D,0x59,0x46,0x97,0x5C,0xA9,0x37,0x6C,0x49,0x7D,0xB0,0xEA,0x15,0x54,0xB7,0xF4,0xC9,0x4A,0x94,0x52,0xBD,0xD5,0x14,0x9D,0xA6,0xAD,0xAB,0x57,0xDD,0x54,0xA8,0x8D,0x6F,0x5E,0x55,0x77,0xCE,0xD6,0xBE,0x6A,0x15,0x3D,0x28,0x5B,0xE5,0xC2,0x56,0x8E,0xAA,0xCC,0xE6,0xAD,0x13,0x30,0x72,0x5B,0x02,0x66,0xE9,0x4E,0xC0,0x4A,0x1B,0x09,0xE8,0xA5,0x7D,0x15,0x2D,0xAA,0x72,0xD8,0xE6,0x55,0xB7,0xA0,0x26,0xE1,0xAB,0x5B,0x53,0x0D,0x76,0xAA,0xC4,0x29,0x75,0x35,0x38,0x66,0xE2,0x64,0xD4,0x55,0x73,0xA6,0x48,0x9C,0x51,0x17,0x6D,0x6E,0x1E,0x8D,0xFE,0x1F};\n" );
+		st += s1;
+		}
+	else{
+		st = "Click tms5220 button:\n\n";
+		st += m1.szptr();
+		}
+
+	sanitise_dlg_str = st;
+	sanitise_dlg_tb->text( sanitise_dlg_str.c_str() );
+
+	wnd_sanitise_dlg->show();
+
+//	#ifndef compile_for_windows
+//	wnd->set_modal();
+//	#endif
+	}
+else{
+	wnd_sanitise_dlg->hide();
+	wnd_sanitise_dlg->show();
+	}
+
+
+
+
+
+
+
+}
 
 
 
@@ -4153,7 +4541,6 @@ say_tmc0580( vsm, last_say_offset );
 
 
 
-fast_mgraph fgph;
 
 static uint16_t synthRand = 1;
 int frame_cnt = 0;
@@ -4980,6 +5367,7 @@ int last_adress = 0;
 //portions of this code originate from Talkie prg on github
 void Talkie::say_tmc0580( uint8_t *buf_lpc, unsigned int offset )
 {
+bool vb = 0;
 bool vb_dbg = 0;
 string s1, st;
 mystr m1;
@@ -5048,7 +5436,7 @@ saf.srate = 8000;
 //	}
 
 
-
+printf( "\n====================================================================\n" );
 
 
 load_chip_params();
@@ -5056,8 +5444,11 @@ load_chip_params();
 
 // 
 
+//float theta = 0;
+//float freq0 = 300;
 
-bool vb = 0;
+
+
 static uint8_t nextPwm;
 float u0,u1,u2,u3,u4,u5,u6,u7,u8,u9,u10;
 float yy;
@@ -5178,12 +5569,13 @@ while(1)
 		if( ( energy_idx == 0xf ) && ( ending_cnt < 0 ) )				//stop frame?
 			{
 			ending_cnt = 2;						//allow lattice iir empty out and to settle to zero after hitting last frame
-printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
+if(vb)printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
 			tgt_energy = tgt_period = tgt_k9 = tgt_k8 = tgt_k7 = tgt_k6 = tgt_k5 = tgt_k4 = tgt_k3 = tgt_k2 = tgt_k1 = tgt_k0 = 0;
 			}
 
 		if( energy_idx != 0xf )
 			{
+if(1)printf("frame_cnt[%03d] ", frame_cnt );
 			//get frame params
 			tgt_energy = tmsEnergy_0280[ energy_idx ];
 			repeat = getBits(1);
@@ -5263,7 +5655,7 @@ printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
 			}
 		}
 
-	if(1)printf("frame_cnt[%03d]: engy_idx: %d, engy: %d, period: %d, rpt: %d, ending_cnt: %d\n", frame_cnt, energy_idx, tgt_energy, tgt_period, repeat, ending_cnt );
+	if(vb)printf("frame_cnt[%03d]: engy_idx: %d, engy: %d, period: %d, rpt: %d, ending_cnt: %d\n", frame_cnt, energy_idx, tgt_energy, tgt_period, repeat, ending_cnt );
 
 	if( first ) 					//first frame?
 		{
@@ -5402,6 +5794,29 @@ printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
 				else{
 					period_cnt++;
 //if(vb_dbg)printf("count - period_cnt: %02d, cur_period: %02d, chirp: %03d  %f\n", period_cnt, cur_period, chirp_0280[period_cnt], u10 );
+					}
+
+//float cur_period_norm = (cur_period/32.0f) - 1.0f;	//normalise to 0.0-->1.0
+//printf( "cur_period %d  cur_period_norm %f\n", cur_period, cur_period_norm );
+
+				if( b_whisper )		//this functionality is not built into of the tms5100 series of chips, just a bit of fun
+					{
+					//force white noise inplace of glotal
+					synthRand = (synthRand >> 1) ^ ((synthRand & 1) ? 0xB800 : 0);
+					int wnoise = (synthRand & 1) ? cur_energy : -cur_energy;
+					u10 = wnoise;
+					u10 /= 2048.0;
+
+					
+//printf( "cur_period %d  cur_period_norm %f\n", cur_period, cur_period_norm );
+
+//					float theta_inc = ( (200.0f-150.0f) * cur_period_norm + 80.0f ) * twopi/8000;
+
+
+//					u10 = sinf( theta );
+//					theta += theta_inc;
+//					if( theta >= twopi ) theta -= twopi;
+//					u10 /= 5.0;
 					}
 				}
 			else{
@@ -5742,7 +6157,7 @@ if( srate <= lpc_srate )
 	}
 
 //printf("ptr_8KHz %d  srconv_ratio %f\n", ptr_8KHz, srconv_ratio );
-printf("sample rate conversion 8KHz --> %d, samples: %f, nyquist: %f\n", srate, (ptr_8KHz * (1.0/srconv_ratio)), nyquist );
+printf("sample rate conversion 8KHz --> %d, samples: %f, nyquist: %f, fir_wndw: %d\n", srate, (ptr_8KHz * (1.0/srconv_ratio)), nyquist, fir_wndw );
 
 //samples for pc audio
 for( int i = 0; i < (ptr_8KHz * (1.0/srconv_ratio)); i++ )
@@ -5789,7 +6204,7 @@ if( srate != srate_au )											//pc audio and .au srates the different?
 		fir_wndw = 256;
 		}
 
-printf("sample rate conversion .au file: 8KHz --> %d, samples: %f, nyquist: %f\n", srate_au, (ptr_8KHz * (1.0/srconv_ratio)), nyquist );
+printf("sample rate conversion .au file: 8KHz --> %d, samples: %f, nyquist: %f, fir_wndw %d\n", srate_au, (ptr_8KHz * (1.0/srconv_ratio)), nyquist, fir_wndw );
 
 	//samples for .au audio file
 	for( int i = 0; i < (ptr_8KHz * (1.0/srconv_ratio)); i++ )
@@ -5831,6 +6246,7 @@ update_gphs();
 
 if( plot_first_time_flag ) 
 	{
+	fgph.label( "pc audio wfm" );										//v1.09
 //	fgph.scale_y( 1.0, 1.0, 1.0, 0.1 );
 //	fgph.shift_y( 0.0, -0.1, -0.10, -0.2 );
 	fgph.font_size( 9 );
@@ -5849,6 +6265,7 @@ if( plot_first_time_flag )
 
 //fgph.plotxy( fgph_vx, fgph_vy0, "drky", "ofw", "drkb", "blk", "pc srate" );	//3 traces cols, bkgd col, axis col, text col, and trace colour coded labels, see defined colours: 'user_col'
 fgph.plotxy_vfloat_1( fgph_vx, fgph_vy0 );	//3 traces cols, bkgd col, axis col, text col, and trace colour coded labels, see defined colours: 'user_col'
+fgph.fit_plot(0);														//v1.09
 
 //fgph.plotxy( gph0_vx, gph0_vamp2 );
 //fgph.plot( 0,gph0_vamp2 );
@@ -7432,7 +7849,8 @@ wndMain->callback((Fl_Callback *)cb_wndmain, wndMain);
 //menu bar
 //meMain = new Fl_Menu_Bar(0, 0, wndMain->w(), 25);
 meMain->textsize(12);
-meMain->copy( menuitems, wndMain );
+//meMain->copy( menuitems, wndMain );
+meMain->menu( menuitems );
 
 
 

@@ -94,8 +94,50 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 										//added menu 'Sample' to 'fast_mgraph' to allow recording and recall of 4 previous plots, see 'b_prev_plot_recording'
 										//added 'fit_plot()' to 'fast_mgraph'
 
-#include "mgraph.h"
+//v1.23				14-oct-2023			//fixed crash in 'fast_mgraph::fit_plot()' when no traces have been loaded
+//v1.24				01-mar-2025			//added to 'fast_mgraph': 'p' key for plot pause toggling 
+//v1.25				08-mar-2025			//added to 'trace_tag': 'user_marker_show' 'vuser_marker[]' 'vuser_marker_idx[]'  these allow a selected plot point to access further information such as Freq Hz, see functions: 'user_marker_show()'  'user_marker_add()' 'user_marker_idx_add()'
+										//also added 'fast_mgraph::user_marker_add()'   'fast_mgraph::user_marker_idx_add()'    'fast_mgraph::user_marker_show()'
+								
+//v1.26				05-may-2025			//added	to 'mgraph'	public var 'mouse_dir'
+										//added	to 'mgraph'	further middle mouse button click functionality
+										//added 'mousex_internal' etc to handle mouse ops internally,   'mousex' etc has fltk vals less widget offset, e.g:  'Fl::event_x() - x()'
 
+//v1.27				08-jun-2025			//added	to 'mgraph' public var 'control_key' 'shift_key'  'last_key' 
+//v1.28				23-jun-2025			//moded 'update_fg_user_obj()' to stop a 'while' loop from looping forever if 'max_tmp' is at infinity
+//v1.29				09-jul-2025			//changed some vectors from 'int' to 'double', e.g: 'vtrace_midx' to stop incorrect x-axis shift with some plot waveforms 
+										//added 'sample_rect_flicker'  to 'fast_mgraph'
+										//moded 'get_mouse_vals_internal()' to handle polar plots correctly
+										//added 'mgraph::get_left_and_right_edge_sample_indexes()' to improve the locating of correct samples, with polar like plots
+										//moded 'mgraph::get_left_edge_sample_idx()' get_right_edge_sample_idx()' to use 'get_left_and_right_edge_sample_indexes()'
+										//moded 'mgraph::zoom_h()' to improve zooming by keeping zoom point at same horiz position
+										//refer 'draw_circle_debug_int()' or 'draw_circle_debug_float()' --  use it be setting 'dbg_type'  and also setting 'idbg0...' etc   --- it will be called by 'mgraph::draw()', DON'T CALL them directly
+										//moded 'mgraph::get_pixel_position_as_trc_values()' to improve calulations
+										//moded 'mgraph::get_mouse_position_relative_to_trc()' to use 'mgraph::get_pixel_position_as_trc_values()'
+										//removed 'mgraph::get_mouse_position_relative_to_trc_new()'
+										//added 'cn_fast_graph_y_tick_range_size' 'y_tick_range[]', refer by search for 'desirable tick values' to see example which can be scale as required dependent on y val extremes
+										//added 'tick_range_y_build()'  refer by search for search for 'desirable tick values'
+										//added 'show_y_axis_guide_lines[]'
+										
+//v1.30				19-dec-2025			//removed a debugging 'printf(..)' in 'update_fg_user_obj()'
+										//added 'fit_plot_to_this_y_range()'
+										//fixed missing the negative y-axis long horiz guide lines and numbers
+
+//v1.31				20-jan-2026			//added hinting to nearest sample points to cursor's hov pos, refer: 'b_show_hov_nearest_sample',  'hov_nearest_sample_build()', 'draw_circle_float()' 'draw_rect_float()' etc
+										//moded 'get_mouse_vals_internal()' to fix problem where only a trc[0] sample was selectable, i.e. problem caused samples on trc[1] etc not being selectable
+										//added 'cn_mgraph_rect_size' 'cn_mgraph_rect_sel_size' 'rect_size_sel'
+
+//v1.32				22-jan-2026			//moded various 'fast_mgraph' code to fix 'fast_mgraph::user_marker_add()'   'fast_mgraph::user_marker_idx_add()'    'fast_mgraph::user_marker_show()'										
+										//was not allowing user markers on traces 1, 2, 3 only trace 0 was working, this will need FURTHER work for multigraph to work
+
+//v1.33				13-mar-2026			//added to 'fast_mgraph'  'log_multiplier_x'  'log_multiplier_y'  as in 20  for: 20*log10(y), i.e.   log_multiplier_y * log10(y)
+										//also used 'std::numeric_limits<double>::epsilon()' in place of neg numbers when using: 'use_logx'  'use_logy'
+
+//v1.34				24-mar-2026			//added to 'fast_mgraph' 'plot_spect_discrete_float()' and 'plot_spect_discrete_double()' which does not need fftw
+										//added to 'fast_mgraph' 'b_show_sel_dB_y' to show dB value of sel sample's y value
+										//added 'namespace dsp_utils_code::make_sine()', it's template based
+
+#include "mgraph.h"
 
 
 
@@ -4303,15 +4345,29 @@ right_button = 0;
 middle_button = 0;
 
 b_invert_wheel = 0;
+mouse_dir = 0;															//v1.08
 mousewheel = 0;
+
+control_key = 0;														//v1.27
+shift_key = 0;
+last_key = 0;
+
 
 inside_control = 0;
 
-rect_size = 10 / 2;
+#define cn_mgraph_rect_size 10
+#define cn_mgraph_rect_sel_size 16
+
+
+rect_size = cn_mgraph_rect_size / 2;
+rect_size_sel = cn_mgraph_rect_sel_size / 2;
 
 woffx = x;
 woffy = y;
+double_click = 0;
 double_click_left = 0;
+double_click_middle = 0;
+double_click_right = 0;
 
 bkgd_border_left = 0;
 bkgd_border_top = 0;
@@ -4415,6 +4471,10 @@ left_click_anywhere_cb_p_callback = 0;
 left_double_click_anywhere_cb_p_callback = 0;
 left_click_release_cb_p_callback = 0;
 
+middle_click_anywhere_cb_p_callback = 0;
+middle_double_click_anywhere_cb_p_callback = 0;
+middle_click_release_cb_p_callback = 0;
+
 right_click_anywhere_cb_p_callback = 0;
 right_double_click_anywhere_cb_p_callback = 0;
 right_click_release_cb_p_callback = 0;
@@ -4444,13 +4504,81 @@ for( int i = 0; i < cn_mgraph_trace_max; i++ )
 	sample_rect_showing[i] = 0;
 	}
 
+
+b_show_hov_nearest_sample = 1;											//v1.31
+hov_nearest_sample_trc = 0;
+hov_nearest_sample_range = 0;
+hov_nearest_sample_idx = 0;
+hov_nearest_col.r = 180;
+hov_nearest_col.g = 180;
+hov_nearest_col.b = 180;
+hov_nearest_linewidth = 0;
+hov_nearest_linestyle = FL_SOLID;
+hov_nearest_sample_circle_radiusx = 8;
+hov_nearest_sample_circle_radiusy = 8;
+
+dbg_type = 0;
 }
+
+
+
 
 
 
 mgraph::~mgraph()
 {
 }
+
+
+
+
+
+
+
+//see 'user_marker_add()' 'user_marker_idx_add()' 
+//e.g: call this after 'add_trace()' is called
+void mgraph::user_marker_show( unsigned int trce_idx, bool user_marker_show )	//v1.25
+{
+if( trce_idx < 0 ) return;
+if( trce_idx >= trce.size() ) return;
+
+trce[ trce_idx ].user_marker_show = user_marker_show;
+}
+
+
+
+
+
+
+//see 'user_marker_idx_add()' 'user_marker_show()'
+//e.g: call this after 'add_trace()' is called
+void mgraph::user_marker_add( unsigned int trce_idx, vector<st_mgraph_user_marker_tag> &vv )	//v1.25
+{
+if( trce_idx < 0 ) return;
+if( trce_idx >= trce.size() ) return;
+
+trce[ trce_idx ].vuser_marker = vv;
+}
+
+
+
+
+
+
+//see 'user_marker_add()'  'user_marker_show()'
+//e.g: call this after 'add_trace()' is called
+void mgraph::user_marker_idx_add( unsigned int trce_idx, vector<int> &vidx )	//v1.25
+{
+if( trce_idx < 0 ) return;
+if( trce_idx >= trce.size() ) return;
+
+trce[ trce_idx ].vuser_marker_idx = vidx;
+}
+
+
+
+
+
 
 
 
@@ -4513,6 +4641,7 @@ tr.left_click_cb_p_callback = 0;
 tr.left_double_click_cb_p_callback = 0;
 
 tr.middle_click_cb_p_callback = 0;
+tr.middle_double_click_cb_p_callback = 0;
 
 tr.right_click_cb_p_callback = 0;
 tr.right_double_click_cb_p_callback = 0;
@@ -4520,6 +4649,7 @@ tr.right_double_click_cb_p_callback = 0;
 
 tr.keydown_cb_p_callback = 0;
 tr.keyup_cb_p_callback = 0;
+
 tr.mousewheel_cb_p_callback = 0;
 tr.mousemove_cb_p_callback = 0;
 
@@ -4531,12 +4661,13 @@ tr.mousex_low_sample_idx = -1;
 tr.mousex_high_sample_idx = -1;
 
 
+//tr.user_marker_show = 0;												//v1.25
+//tr.vuser_marker.clear();
+//tr.vuser_marker_idx.clear();
+
 trce.push_back( tr );
+
 }
-
-
-
-
 
 
 
@@ -4895,11 +5026,21 @@ return 1;
 
 
 
-
 //get leftmost visible sample index, NOTE: will produce out of bound indexes, so you need to check index is within 'get_sample_count()' limits
 //returns 1 on success, else 0
 bool mgraph::get_left_edge_sample_idx( int trc, int &left_idx )
 {
+
+
+int right_idx;
+
+if( !get_left_and_right_edge_sample_indexes( trc, left_idx, right_idx ) )	//v1.29
+	{
+	return 0;
+	}
+
+
+/*
 if ( trce.size() == 0 ) return 0;
 
 if ( trc < 0 ) return 0;
@@ -4922,6 +5063,13 @@ left_idx = nearbyint( (-trce[ trc ].posx / bkgd_wid * count ) / trce[ trc ].scal
 //printf("left_idx: %d\n", left_idx );
 //printf("bkgd_wid: %d, posx: %f, count %d\n", bkgd_wid, trce[ trc ].posx, count );
 //left_idx *= trce[ trc ].scalex;
+*/
+
+
+
+
+
+
 return 1;
 }
 
@@ -4933,6 +5081,7 @@ return 1;
 //returns 1 on success, else 0
 bool mgraph::set_left_edge_sample_idx( int trc, int left_idx )
 {
+
 if ( trce.size() == 0 ) return 0;
 
 if ( trc < 0 ) return 0;
@@ -4947,7 +5096,42 @@ int wid, hei;
 //get_vis_dimensions( wid, hei );
 get_trace_vis_dimensions( trc, wid, hei );
 
-trce[ trc ].posx = -(float)left_idx / count * wid * trce[ trc ].scalex;
+
+
+//trce[ trc ].posx = -(float)left_idx / count * wid * trce[ trc ].scalex;
+
+//							trce[ trc ].posx = 0;
+//left_idx = 13;
+
+double x1, x2, x3, x4;
+double y1, y2, y3, y4;
+
+x1 = trce[ trc ].pnt[left_idx].x;
+y1 = trce[ trc ].pnt[left_idx].y;
+
+trce[ trc ].posx = 0;
+
+//	{
+	int trace_offx, trace_offy, plot_offsx, plot_offsy;
+	double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+	get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+//printf("set_left_edge_sample_idx() - trace_offx %d   positionx %f   trce[ trc ].border_left %d  trce[ trc ].plot_offsx %d\n", trace_offx, positionx, trce[ trc ].border_left, trce[ trc ].plot_offsx  );
+
+
+
+//	}
+
+//trce[ trc ].posx = -trce[ trc ].pnt[left_idx].x;
+
+
+	get_plot_values( trc, x1, y1, x2, y2, x3, y3, x4, y4 );
+
+
+trce[ trc ].posx = -x1 + trace_offx;
+//printf("set_left_edge_sample_idx() - left_idx %d   x1 %f  trce[ trc ].posx %f\n", left_idx, x1, trce[ trc ].posx );
+
 return 1;
 }
 
@@ -4964,6 +5148,14 @@ return 1;
 //returns 1 on success, else 0
 bool mgraph::get_right_edge_sample_idx( int trc, int &right_idx )
 {
+
+int left_idx;
+if( !get_left_and_right_edge_sample_indexes( trc, left_idx, right_idx ) )	//v1.29
+	{
+	return 0;
+	}
+/*
+
 if ( trce.size() == 0 ) return 0;
 
 if ( trc < 0 ) return 0;
@@ -4982,7 +5174,7 @@ int bkgd_wid = w() - bkgd_reductionx;
 int bkgd_hei = h() - bkgd_reductiony;
 
 right_idx = nearbyint( ( (bkgd_wid - trce[ trc ].posx) / bkgd_wid * count ) / trce[ trc ].scalex );
-
+*/
 
 return 1;
 }
@@ -5088,10 +5280,36 @@ else gph0->zoom_h( 0, sel_sample, 1.0 / gph0_scale_change,  1 );			//contract
 // !!! EXAMPLE CODE  is above
 bool mgraph::zoom_h( int trc, int zoom_idx, float scale_change, bool force_extent_when_contracted_beyond )
 {
+bool vb = 0;
 if ( trce.size() == 0 ) return 0;
 
 if ( trc < 0 ) return 0;
 if( trc >= trce.size() ) return 0;
+
+
+
+dbg_type = 0;															//refer: 'draw_circle_debug_int()'  and 'dbg_type'  'idbg0...' etc
+
+fdbg0 = trce[ trc ].pnt[zoom_idx].x;
+fdbg1 = trce[ trc ].pnt[zoom_idx].y;
+idbg2 = 9;
+idbg3 = 9;
+idbg_r = 255;
+idbg_g = 0;
+idbg_b = 0;
+
+
+
+//trce[ trc ].scalex = 0.5;
+//set_left_edge_sample_idx( trc, 13 );
+
+
+
+//return 1;
+
+
+
+
 
 if( force_extent_when_contracted_beyond )
 	{
@@ -5110,6 +5328,196 @@ if( force_extent_when_contracted_beyond )
 		}
 	}
 
+
+
+//-----
+double x1, x2, x3, x4;
+double y1, y2, y3, y4;
+
+double cur_scale = trce[ trc ].scalex;
+//trce[ trc ].scalex = 1;
+
+//trce[ trc ].scalex *= scale_change;
+
+x1 = trce[ trc ].pnt[zoom_idx].x;
+y1 = trce[ trc ].pnt[zoom_idx].y;
+
+double initial_posx = trce[ trc ].posx;
+
+//	{
+	int trace_offx, trace_offy, plot_offsx, plot_offsy;
+	double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+	get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+	get_plot_values( trc, x1, y1, x2, y2, x3, y3, x4, y4 );
+
+if(vb)printf("zoom_h() - zoom_idx %d\n", zoom_idx );
+if(vb)printf("zoom_h() - trace_offx %d   positionx %f   trce[ trc ].border_left %d  trce[ trc ].plot_offsx %d\n", trace_offx, positionx, trce[ trc ].border_left, trce[ trc ].plot_offsx  );
+
+
+int initial_x = x1;	//has posx offset
+int initial_y = y1;
+
+if(vb)printf("zoom_h() - initial_x %d %d\n", initial_x, initial_y );
+
+//	}
+
+
+trce[ trc ].scalex = cur_scale * scale_change;							//adj to req scale
+
+
+//----- piecemeal posx matching following a scale change ------
+//using x1's initial screen position before scale change(above), do scale change(above), then loop and tweek 'posx' till x1's new screen position is within same region (horiz dir only)
+int step_amount = 40;
+int dir = 0;															//used to detect if passed the wnd that we trying to match with, if so will then reduce 'step_amount'
+int cnt = 0;
+bool match = 0;
+for( int i = 0; i < 10000; i++ )
+	{
+	
+	x1 = trce[ trc ].pnt[zoom_idx].x;
+	y1 = trce[ trc ].pnt[zoom_idx].y;
+
+	int trace_offx, trace_offy, plot_offsx, plot_offsy;
+	double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+//	get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+	get_plot_values( trc, x1, y1, x2, y2, x3, y3, x4, y4 );
+
+//	printf("zoom_h() - zoom_idx %d\n", zoom_idx );
+//	printf("zoom_h() - trace_offx %d   positionx %f   trce[ trc ].border_left %d  trce[ trc ].plot_offsx %d\n", trace_offx, positionx, trce[ trc ].border_left, trce[ trc ].plot_offsx  );
+
+
+	int curx = x1;
+if(vb)printf("zoom_h() - matching xpos by piecemeal tweek and check- initial_x %d,  cur x %d   step_amount %d trce[ trc ].posx %f\n", initial_x, curx, step_amount, trce[ trc ].posx  );
+
+	bool passed_by = 0;													//set if 'dir' was reversed, this indicates a pass over 'wnd' occurred
+	int wnd = 2;
+	if( ( curx >= (initial_x - wnd) ) && ( curx <= (initial_x + wnd ) ) )
+		{
+		match = 1;
+		if(vb)printf("zoom_h() - matched was made - initial_x %d,  cur x %d, loop cnt %d\n", initial_x, curx, cnt );
+		break;
+		}
+
+	if( curx < (initial_x - wnd) )
+		{
+		if(vb)printf("zoom_h() - no matched, was low - initial_x %d,  cur x %d  trce[ trc ].posx %f\n", initial_x, curx, trce[ trc ].posx );
+		trce[ trc ].posx += step_amount;
+		if( dir == -1 ) passed_by = 1;
+		dir = 1;	
+		}
+	else{
+		if( curx > (initial_x + wnd) )
+			{
+			if(vb)printf("zoom_h() - no matched, was high - initial_x %d,  cur x %d  trce[ trc ].posx %f\n", initial_x, curx, trce[ trc ].posx );
+			trce[ trc ].posx -= step_amount;	
+			if( dir == 1 ) passed_by = 1;
+			dir = -1;	
+			}
+		}
+
+
+	if( passed_by ) step_amount--;
+	if( step_amount < 1 ) step_amount = 1;
+
+
+//	printf("zoom_h() - initial_x %d %d\n", initial_x, initial_y );
+	cnt++;
+	}
+
+if(vb)if( !match ) printf("zoom_h() - no matched when scale change was made, tried %d loops, xcoord will be shifted horizontally, sample idx where zoom was to centre is: %d\n", cnt, zoom_idx );
+//--------
+
+
+
+/*
+//trce[ trc ].posx = tmp_posx;
+
+
+
+
+x1 = trce[ trc ].pnt[zoom_idx].x;
+y1 = trce[ trc ].pnt[zoom_idx].y;
+
+
+
+trce[ trc ].posx = 0;
+
+//	{
+	trace_offx, trace_offy, plot_offsx, plot_offsy;
+	trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+	get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+	get_plot_values( trc, x1, y1, x2, y2, x3, y3, x4, y4 );
+
+printf("zoom_h() - zoom_idx %d\n", zoom_idx );
+printf("zoom_h() - trace_offx %d   positionx %f   trce[ trc ].border_left %d  trce[ trc ].plot_offsx %d\n", trace_offx, positionx, trce[ trc ].border_left, trce[ trc ].plot_offsx  );
+
+
+int poszero_x = x1;
+int poszero_y = y1;
+
+printf("zoom_h() - poszero_x %d %d\n", poszero_x, poszero_y );
+
+//	}
+
+
+
+
+
+
+trce[ trc ].scalex = cur_scale * scale_change;
+x1 = trce[ trc ].pnt[zoom_idx].x;
+y1 = trce[ trc ].pnt[zoom_idx].y;
+
+
+	trace_offx, trace_offy, plot_offsx, plot_offsy;
+	trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+	get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+	get_plot_values( trc, x1, y1, x2, y2, x3, y3, x4, y4 );
+
+
+
+int scale_x = x1;
+int scale_y = y1;
+
+printf("zoom_h() - scale_x %d %d\n", scale_x, scale_y );
+
+//trce[ trc ].posx = -x1 / trce[ trc ].scalex + trace_offx;
+
+//
+double moded_posx = 0 + (scale_x - initial_x);// * scale_change;
+
+trce[ trc ].posx = moded_posx;//initial_x + -(scale_x - poszero_x);					// + trace_offx;
+
+//trce[ trc ].posx = tmp_posx;
+*/
+
+//-----
+
+
+redraw();
+return 1;
+
+
+
+
+
+
+
+
+
+
+/*
+
+
+
 int wid, hei;
 //get_vis_dimensions( wid, hei );
 get_trace_vis_dimensions( trc, wid, hei );
@@ -5123,13 +5531,23 @@ if( !get_left_edge_sample_idx( trc, left_idx ) ) return 0;
 int right_idx;
 if( !get_right_edge_sample_idx( trc, right_idx ) ) return 0;
 
-//printf("zoom_h() left_idx: %d, right_idx: %d\n", left_idx, right_idx );
+
+double zx0 = trce[ trc ].pnt[zoom_idx].x;
+double x0 = trce[ trc ].pnt[left_idx].x;
+double x1 = trce[ trc ].pnt[right_idx].x;
+
 
 
 float new_total_sample_wnd = ( right_idx - left_idx ) / scale_change;
 
 float samples_left_of_mouse = ( zoom_idx - left_idx ) / scale_change;
 
+
+double newx = (x1 - x0) / scale_change;
+
+newx -= zx0;
+
+//trce[ trc ].posx = -newx;
 
 float new_left_sample = zoom_idx - 0 - samples_left_of_mouse;
 
@@ -5140,12 +5558,18 @@ float new_left_sample = zoom_idx - 0 - samples_left_of_mouse;
 
 //printf("zoom_h() - scalex %f  scale_change %f\n", trce[ trc ].scalex, scale_change );
 
-trce[ trc ].scalex *= scale_change;
+//trce[ trc ].scalex *= scale_change;
 
 //printf("zoom_h() - trce[ trc ].posx %f\n", trce[ trc ].posx );
 //printf("zoom_h() - scalex %f  scale_change %f\n", trce[ trc ].scalex, scale_change );
 
-set_left_edge_sample_idx( trc, new_left_sample );
+//gc   set_left_edge_sample_idx( trc, new_left_sample );
+
+set_left_edge_sample_idx( trc, 13 );
+
+
+printf("zoom_h() - left_idx: %d, right_idx: %d  newx %f  new_left_sample %f\n", left_idx, right_idx, newx, new_left_sample );
+
 
 //trce[ trc ].posx = +14;//trce[ trc ].minx;
 //set_left_edge_sample_idx( trc, 0 );
@@ -5159,6 +5583,7 @@ if( trce[ trc ].selected_idx != -1 )
 
 redraw();
 return 1;
+*/
 }
 
 
@@ -5194,12 +5619,18 @@ if ( trce.size() == 0 ) return 0;
 if ( trc < 0 ) return 0;
 if( trc >= trce.size() ) return 0;
 
+
 int count;
 
 if( !mgraph::get_sample_count_for_trc( trc, count ) ) return 0;
 
 if( count == 0 ) return 0;
 if( sample_idx >= count ) return 0 ;
+
+
+
+
+
 
 int wid, hei;
 //get_vis_dimensions( wid, hei );
@@ -7106,7 +7537,6 @@ int yy = nearbyint( trace_midy - y + trace_offy + positiony );
 */
 
 
-rect_size = 10 / 2;
 
 int left =  x1 - rect_size / 2;
 int top =  y1 - rect_size / 2;
@@ -8377,8 +8807,10 @@ fl_pop_clip();
     }
 //----------------------
 
-}
+if( dbg_type == 1 ) draw_circle_debug_int ( idbg0, idbg1, idbg2, idbg3, idbg_r, idbg_g, idbg_b );
+if( dbg_type == 2 ) draw_circle_debug_float( fdbg0, fdbg1, idbg2, idbg3, idbg_r, idbg_g, idbg_b );
 
+}
 
 
 
@@ -8389,6 +8821,185 @@ int plotx_max = 0;
 int ploty_max = 0;
 int plotx_min = 0;
 int ploty_min = 0;
+
+
+
+
+//this is called by 'draw()', to use it by setting 'dbg_type' 'idbg0...' etc, DON'T CALL this directly
+void mgraph::draw_circle_debug_int( int ix, int iy, int iw, int ih, int rr, int gg, int bb )
+{
+fl_color( rr, gg, bb );
+fl_line_style ( FL_SOLID, 1 );         //for windows you must set line setting after the colour, see the manual
+
+fl_arc( ix - iw/2, iy - ih/2, iw, ih, 0, 360 );		//x,y,dx,dy,arc1,arc2
+}
+
+
+
+
+
+
+
+//see 'draw_circle_float()'
+//this is called by 'draw()', use it by setting 'dbg_type' 'idbg0...' etc, DON'T CALL this directly, instead use 'draw_circle_float()'
+//''fx' and 'fy' must be in the 'trace_tag.pnt' coord system
+void mgraph::draw_circle_debug_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb )
+{
+int trc = 0;
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+
+if( !get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy ) )
+	{
+	return;
+	}
+
+double trcminx = 0;
+if( trc < vtrace_minx.size() )
+	{
+	trcminx = vtrace_minx[ trc ];
+	}
+
+
+
+
+
+int iminx = std::numeric_limits<int>::max();
+int imaxx = std::numeric_limits<int>::min();
+
+int idx_minx = -1;
+int idx_maxx = -1;
+
+int ival_minx, ival_maxx;
+int ival_miny, ival_maxy;
+
+
+double x1 = fx;
+double y1 = fy;
+
+double x = (x1-trcminx) * scalex * trace_scalex - d_midx * scalex;
+double y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+int ix = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+int iy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+fl_color( rr, gg, bb );
+fl_line_style ( FL_SOLID, 1 );         //for windows you must set line setting after the colour, see the manual
+
+fl_arc( ix - iw/2, iy - ih/2, iw, ih, 0, 360 );		//x,y,dx,dy,arc1,arc2
+}
+
+
+
+
+
+
+
+//draws a circle around spec coord
+//'fx' and 'fy' must be in the 'trace_tag.pnt' coord system
+void mgraph::draw_circle_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb )
+{
+int trc = 0;
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+
+if( !get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy ) )
+	{
+	return;
+	}
+
+double trcminx = 0;
+if( trc < vtrace_minx.size() )
+	{
+	trcminx = vtrace_minx[ trc ];
+	}
+
+
+
+
+
+int iminx = std::numeric_limits<int>::max();
+int imaxx = std::numeric_limits<int>::min();
+
+int idx_minx = -1;
+int idx_maxx = -1;
+
+int ival_minx, ival_maxx;
+int ival_miny, ival_maxy;
+
+
+double x1 = fx;
+double y1 = fy;
+
+double x = (x1-trcminx) * scalex * trace_scalex - d_midx * scalex;
+double y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+int ix = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+int iy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+fl_color( rr, gg, bb );
+fl_line_style ( FL_SOLID, 1 );         //for windows you must set line setting after the colour, see the manual
+
+fl_arc( ix - iw/2, iy - ih/2, iw, ih, 0, 360 );		//x,y,dx,dy,arc1,arc2
+}
+
+
+
+
+
+//draws a rect around spec coord
+//'fx' and 'fy' must be in the 'trace_tag.pnt' coord system
+void mgraph::draw_rect_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb )
+{
+int trc = 0;
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+
+if( !get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy ) )
+	{
+	return;
+	}
+
+double trcminx = 0;
+if( trc < vtrace_minx.size() )
+	{
+	trcminx = vtrace_minx[ trc ];
+	}
+
+
+
+
+
+int iminx = std::numeric_limits<int>::max();
+int imaxx = std::numeric_limits<int>::min();
+
+int idx_minx = -1;
+int idx_maxx = -1;
+
+int ival_minx, ival_maxx;
+int ival_miny, ival_maxy;
+
+
+double x1 = fx;
+double y1 = fy;
+
+double x = (x1-trcminx) * scalex * trace_scalex - d_midx * scalex;
+double y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+int ix = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+int iy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+fl_color( rr, gg, bb );
+fl_line_style ( FL_SOLID, 1 );         //for windows you must set line setting after the colour, see the manual
+
+fl_rect( ix - iw/2, iy - ih/2, iw, ih );
+}
 
 
 
@@ -9160,6 +9771,7 @@ fl_rect(  xx, yy, 10, 10 );
 				}
 	//		fl_point( axisx + t * factorx , midy - y );
 
+//printf("mgraph positionx %f\n", positionx );
 
 			int xx = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
 			int yy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
@@ -9331,7 +9943,7 @@ fl_rect(  xx, yy, 10, 10 );
 
 //check if sample point rect hinting congestion is happening (and user optioned to turn it off when it happens)
 //clear hinting if distances are too close
-if( !(double_click_left & trce[ i ].sample_rect_hints_double_click) )
+if( !(double_click & trce[ i ].sample_rect_hints_double_click) )
 	{
 	if( trce[ i ].vrect_hints_px.size() > 2  )						//is it unlikey there will be hinting congestion
 		{
@@ -9537,6 +10149,31 @@ fl_line_style( FL_SOLID, 1 );        				 //for windows you must set line settin
 //-------------------------------
 
 
+//-------- show hover nearest sample rects ----------------
+//vhov_nearest_sample_idx
+if( b_show_hov_nearest_sample )
+	{
+	if( hov_nearest_sample_trc < trce.size() )
+		{
+		if( ( hov_nearest_sample_idx >= 0 ) && ( hov_nearest_sample_idx < trce[hov_nearest_sample_trc].pnt.size() ) )
+			{
+			for( int i = 0; i < vhov_nearest_sample_idx.size(); i++ )
+				{
+					
+				int idx = vhov_nearest_sample_idx[i];
+				float fx = trce[hov_nearest_sample_trc].pnt[idx].x;
+				float fy = trce[hov_nearest_sample_trc].pnt[idx].y;
+				
+				fl_line_style( hov_nearest_linestyle, hov_nearest_linewidth );  //for windows you must set line setting after the colour, see the manual
+				draw_circle_float( fx, fy, hov_nearest_sample_circle_radiusx, hov_nearest_sample_circle_radiusy, hov_nearest_col.r, hov_nearest_col.g, hov_nearest_col.b );		
+				}
+			}
+		fl_line_style( FL_SOLID, 1 );        							//for windows you must set line setting after the colour, see the manual
+		}
+	}
+//-------------------------------------------------------
+
+
 // ---- show single selected sample ----
 for( int i = 0; i < trce.size(); i++ )
 	{
@@ -9574,6 +10211,58 @@ for( int i = 0; i < trce.size(); i++ )
 			fl_line_style( FL_SOLID, 1 );        				 //for windows you must set line setting after the colour, see the manual
 			rect_clip( trce[ i ].selected_pixel_rect_left , trce[ i ].selected_pixel_rect_top, trce[ i ].selected_pixel_rect_wid + 1, trce[ i ].selected_pixel_rect_hei + 1 );
 	//		fl_rect(  trce[ i ].selected_pixel_rect_left , trce[ i ].selected_pixel_rect_top, trce[ i ].selected_pixel_rect_right, trce[ i ].selected_pixel_rect_bot );
+
+
+
+
+			if( trce[ i ].user_marker_show )							//v1.25
+				{
+//printf("KKKKKKKKKKKKKKKKKKKKKKKK trce[ %d ].user_marker_show %d  selected_idx %d\n", i, trce[ i ].user_marker_show, trce[ i ].selected_idx );			
+				if( trce[ i ].selected_idx < trce[ i ].vuser_marker_idx.size() )		//any user marker idx details avail?
+					{
+					int user_marker_idx = trce[ i ].vuser_marker_idx[  trce[ i ].selected_idx ];	//get idx to 'vuser_marker[]'
+					
+					if( user_marker_idx < trce[ i ].vuser_marker.size() );				//any 'vuser_marker[]' details avail?
+						{
+						st_mgraph_user_marker_tag ou = trce[ i ].vuser_marker[ user_marker_idx ];
+
+
+						fl_color( ou.col0_r, ou.col0_g, ou.col0_b );
+
+						int iF = fl_font();
+						int iS = fl_size();
+
+						fl_font( ou.font0, ou.font_size0 );
+
+						string s1;
+						s1 = ou.s0;
+						
+						strpf( s1, "%s", s1.c_str() );
+						
+	//					int offx = woffx + bkgd_border_left;
+	//					int offy = woffy + bkgd_border_top;
+					  
+						int ipx = trce[ i ].selected_pixel_rect_left + ou.sel_offx0;
+						int ipy = trce[ i ].selected_pixel_rect_top + ou.sel_offy0;
+						
+						
+						int iwidth, iheight;							//v1.32  keep text within wnd
+						iwidth = 0;
+						fl_measure( s1.c_str(), iwidth, iheight );
+
+
+						if( (ipx + iwidth) >= (w() - 10) ) ipx = w() - iwidth - 10;
+
+						if( (ipy - iheight) < (0 + 20) ) ipy = ipy - iheight + 40;
+						
+						fl_draw( s1.c_str(), ipx, ipy );
+						fl_font( iF, iS );
+						}
+					}
+
+				}
+
+
 			}
 		}
 	}
@@ -9617,7 +10306,6 @@ if( lissa_status_x & lissa_status_y )
 
 
 
-
 fl_pop_clip();
 
 
@@ -9633,14 +10321,158 @@ fl_pop_clip();
 
 //draw_cursors();
 
-draw_text();
 
+
+
+//dbg_type = 1;
+//draw_dbg();
+
+
+draw_text();
 drw_cnt++;
 }
 
 
 
 
+
+
+
+
+
+
+
+//returns 1 on success, else 0
+bool mgraph::get_left_and_right_edge_sample_indexes( int trc, int &left_idx, int &right_idx )	//v1.29
+{
+//printf( "mgraph::get_left_and_right_edge_sample_indexes()\n" );
+
+//if( !dbg_type ) return 0;
+
+
+
+if( trc >= trce.size() ) return 0;
+
+
+int trc_reductionx = trce[trc].border_right + trce[trc].border_left;
+int trc_reductiony = trce[trc].border_bottom + trce[trc].border_top;
+
+
+int bkgd_reductionx = bkgd_border_right + bkgd_border_left + trc_reductionx;
+int bkgd_reductiony = bkgd_border_bottom + bkgd_border_top + trc_reductiony;
+
+int bkgd_wid = w() - bkgd_reductionx;
+int bkgd_hei = h() - bkgd_reductiony;
+
+
+//printf( "mgraph::get_left_and_right_edge_sample_idexes() - border_left      %d %d\n", trce[trc].border_left, trce[trc].border_right );
+//printf( "mgraph::get_left_and_right_edge_sample_idexes() - bkgd_border_left %d %d\n", bkgd_border_left, bkgd_border_right );
+
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+
+if( !get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy ) )
+	{
+	return 0;
+	}
+
+double trcminx = 0;
+if( trc < vtrace_minx.size() )
+	{
+	trcminx = vtrace_minx[ trc ];
+	}
+
+
+
+
+
+int iminx = std::numeric_limits<int>::max();
+int imaxx = std::numeric_limits<int>::min();
+
+int idx_minx = -1;
+int idx_maxx = -1;
+
+int ival_minx, ival_maxx;
+int ival_miny, ival_maxy;
+
+
+for( int i = 0; i < trce[ trc ].pnt.size(); i++ )			//cycle each coord point
+	{
+
+//			double x1 = trce[ i ].pnt[ j ].x - trce[ i ].minx;
+	double x1 = trce[ trc ].pnt[ i ].x;
+	double y1 = trce[ trc ].pnt[ i ].y;
+
+	double x = (x1-trcminx) * scalex * trace_scalex - d_midx * scalex;
+	double y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+	
+//printf( "mgraph::draw_dbg() - trcminx %f\n", trcminx );
+
+	int ix = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+	int iy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+	bool outsidex = 0;
+	bool outsidey = 0;
+	
+	if( ( ix < (bkgd_reductionx-1) ) || ( ix > (bkgd_reductionx + bkgd_wid) ) )		//use 'bkgd_reductionx-1' to get assess a left 'pnt' sitting just beyond left plotting limits
+		{
+		outsidex = 1;
+		}
+	
+	if( ( iy < bkgd_reductiony ) || ( iy > (bkgd_reductiony + bkgd_wid) ) )
+		{
+		outsidey = 1;
+		}
+
+	bool outside = outsidex | outsidey;
+	
+	if( !outside ) 
+		{
+		if( ix <  iminx )
+			{
+			iminx = ix;													//store new extreme	point details
+
+			idx_minx = i;
+
+			ival_minx = x1;	
+			ival_miny = y1;	
+			}
+
+		if( ix > imaxx )
+			{
+			imaxx = ix;
+			idx_maxx = i;
+
+			ival_maxx = x1;	
+			ival_maxy = y1;	
+			}
+		}
+
+	}
+
+
+if( idx_minx != -1 ) 
+	{
+	left_idx = idx_minx;
+//	fl_arc( ival_minx-4, ival_miny-4, 9,  9, 0, 359 );
+	
+//	fl_color( 255, 0, 0 );
+//	fl_line_style ( FL_SOLID, 1 );         //for windows you must set line setting after the colour, see the manual
+	}
+
+
+if( idx_maxx != -1 ) 
+	{
+	right_idx = idx_maxx;
+	}
+
+//printf( "mgraph::get_left_and_right_edge_sample_idexes() - idx_minx %d %d\n", idx_minx, idx_maxx );
+
+return 1;
+}
 
 
 
@@ -9668,6 +10500,35 @@ void mgraph::set_left_double_click_anywhere_cb( void (*p_cb)( void* ), void *arg
 left_double_click_anywhere_cb_p_callback = p_cb;
 left_double_click_anywhere_cb_args = args_in;
 }
+
+
+
+
+
+
+
+
+//callback to call when middle mouse button is clicked
+//non trace specific
+void mgraph::set_middle_click_anywhere_cb( void (*p_cb)( void* ), void *args_in )
+{
+middle_click_anywhere_cb_p_callback = p_cb;
+middle_click_anywhere_cb_args = args_in;
+}
+
+
+
+
+//callback to call when middle mouse button is double clicked
+//non trace specific
+void mgraph::set_middle_double_click_anywhere_cb( void (*p_cb)( void* ), void *args_in )
+{
+middle_double_click_anywhere_cb_p_callback = p_cb;
+middle_double_click_anywhere_cb_args = args_in;
+}
+
+
+
 
 
 
@@ -9742,6 +10603,16 @@ left_click_release_cb_args = args_in;
 }
 
 
+
+
+
+
+
+
+
+
+
+
 //when mouse enters the control's border rectangle
 void mgraph::set_mouseenter_cb( void (*p_cb)( void* ), void *args_in )
 {
@@ -9777,6 +10648,38 @@ trce[ trc ].middle_click_cb_args = args_in;
 
 return 1;
 }
+
+
+
+
+
+
+//callback to call when middle mouse button is double clicked
+bool mgraph::set_middle_double_click_cb( int trc, void (*p_cb)( void* ), void *args_in )
+{
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+trce[ trc ].middle_double_click_cb_p_callback = p_cb;
+trce[ trc ].middle_double_click_cb_args = args_in;
+
+return 1;
+}
+
+
+
+
+//callback to call when middle mouse button is released
+void mgraph::set_middle_click_release_cb( void (*p_cb)( void* ), void *args_in )
+{
+middle_click_release_cb_p_callback = p_cb;
+middle_click_release_cb_args = args_in;
+}
+
+
+
 
 
 
@@ -9952,8 +10855,8 @@ return 1;
 //relative to widget top/left position, does not remove any borders
 void mgraph::get_mouse( int &mx, int &my )
 {
-mx = mousex;
-my = mousey;
+mx = mousex_internal;
+my = mousey_internal;
 }
 
 
@@ -9968,8 +10871,8 @@ int offx, offy;
 
 get_background_offsxy( offx, offy );
 
-mx = mousex - offx;
-my = mousey - offy;
+mx = mousex_internal - offx;
+my = mousey_internal - offy;
 }
 
 
@@ -9983,8 +10886,8 @@ int offx, offy;
 
 if( !get_trace_offsxy( trc, offx, offy ) ) return 0;
 
-mx = mousex - offx;
-my = mousey - offy;
+mx = mousex_internal - offx;
+my = mousey_internal - offy;
 
 return 1;
 }
@@ -9997,6 +10900,19 @@ return 1;
 //these are values relative to trace sample values (not pixel values, see also : 'get_mouse_pixel_position()' )
 bool mgraph::get_mouse_position_relative_to_trc( int trc, double &mx, double &my )
 {
+int px, py;
+
+
+get_mouse_pixel_position_on_background( px, py );
+
+if( !get_pixel_position_as_trc_values( trc, px, py, mx, my ) ) return 0;
+
+
+return 1;
+
+
+
+
 if ( trce.size() == 0 ) return 0;
 
 if ( trc < 0 ) return 0;
@@ -10019,10 +10935,17 @@ double x1 = trce[ trc ].pnt[ left_idx ].x;
 double x2 = trce[ trc ].pnt[ right_idx ].x;
 
 
+//return 1;
+
+
 double xmin, xmax, ymin, ymax;
 get_trace_min_max( trc, xmin, xmax, ymin, ymax );
 
-//printf( "trcymin: %f, trcymax: %f\n", ymin, ymax );
+printf( "mgraph::get_mouse_position_relative_to_trc() - left_idx %d %d\n", left_idx, right_idx );
+
+printf( "mgraph::get_mouse_position_relative_to_trc() - xmin %f %f  ymin: %f %f\n", xmin, xmax, ymin, ymax );
+
+//printf( "mgraph::get_mouse_position_relative_to_trc() - x1 %f %f\n", x1, x2 );
 
 double maxy = fabs(ymax);
 if( fabs(ymin) > maxy )  maxy = fabs(ymin);									//find which y extreme to use
@@ -10045,7 +10968,7 @@ get_trace_vis_dimensions( trc, wid, hei );
 //int grat_offx = woffx + graticule_border_left;
 //int grat_offy = woffy + graticule_border_top;
 
-mx = x1 + (x2 - x1) * ( (float)(mousex - offx) / wid );
+mx = x1 + (x2 - x1) * ( (float)(mousex_internal - offx) / wid );
 
 double offsety = trce[ trc ].posy / (hei / 2);// * trce[ trc ].scaley;
 
@@ -10054,7 +10977,7 @@ maxy /= trce[ trc ].scaley;
 offsety *= maxy;
 
 //printf( "offsety: %f\n", offsety );
-my = -maxy + (2.0*maxy) * ( 1.0 - (float)(mousey - offy) / hei );
+my = -maxy + (2.0*maxy) * ( 1.0 - (float)(mousey_internal - offy) / hei );
 my -= offsety;
 
 return 1;
@@ -10064,7 +10987,7 @@ return 1;
 
 
 
-
+/*
 
 //based on 'get_mouse_position_relative_to_trc()', but has better 'my' results
 //these are values relative to trace sample values (not pixel values, see also : 'get_mouse_pixel_position()' )
@@ -10105,7 +11028,7 @@ int wid, hei;
 //get_vis_dimensions( wid, hei );
 get_trace_vis_dimensions( trc, wid, hei );
 
-mx = x1 + (x2 - x1) * ( (float)(mousex - offx) / wid );
+mx = x1 + (x2 - x1) * ( (float)(mousex_internal - offx) / wid );
 
 //mx -= trce[ trc ].posx;
 
@@ -10113,7 +11036,7 @@ mx = x1 + (x2 - x1) * ( (float)(mousex - offx) / wid );
 
 
 //ths is a different method for calc of 'my'
-float ctrl = ( ( 1.0 - (float)(mousey - offy) / hei ) - 0.5 ) * 2.0;		//this is 0 at middle of y trace, +1 at top, -1 at bottom
+float ctrl = ( ( 1.0 - (float)(mousey_internal - offy) / hei ) - 0.5 ) * 2.0;		//this is 0 at middle of y trace, +1 at top, -1 at bottom
 
 //printf( "mgraph::get_mouse_position_relative_to_trc_new() - ctrl: %f \n", ctrl );
 //printf( "mgraph::get_mouse_position_relative_to_trc_new() - [].posy: %f \n",  trce[ trc ].posy );
@@ -10130,6 +11053,198 @@ midy /= trce[ trc ].scaley;
 my = ( ymax - midy )*ctrl + midy;
 
 //printf( "mgraph::get_mouse_position_relative_to_trc_new() - dd: %f\n",  dd );
+
+return 1;
+}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 'px, py' are pixel coords
+// 'valx, valy' are values the pixel coords would translate to on trace
+bool mgraph::get_pixel_position_as_trc_values( int trc, int px, int py, double &valx, double &valy )		//v1.29
+{
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+
+
+/*
+---- given forward 'px' calc just below, reverse calcs to derive x0, as shown further below -----
+x1 = (x0-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex;		//forward
+
+px = nearbyint( trace_midx + x1 + trace_offx + positionx + plot_offsx );	//forward
+
+
+==> we need to derive 'x0', so REVERSE calcs with stages below:
+
+x1 / scalex  = (x0-trce[ trc ].minx) * trace_scalex - d_midx;			//need x0, stage 1, reversing of this: 'x1 = (x0-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex'
+x1 / scalex + d_midx = (x0-trce[ trc ].minx) * trace_scalex;			//need x0, stage 2, reversing of this: 'x1 = (x0-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex'
+(x1 / scalex + d_midx) / trace_scalex = (x0-trce[ trc ].minx);			//need x0, stage 2, reversing of this: 'x1 = (x0-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex'
+
+(x1 / scalex + d_midx) / trace_scalex + trce[ trc ].minx = x0;			//need x0, stage 3, reversing of this: 'x1 = (x0-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex'
+
+solution:  x0 = (x1 / scalex + d_midx) / trace_scalex + trce[ trc ].minx;	//use this
+//-------------
+*/
+
+
+
+
+/*
+---- given forward 'py' calc just below, reverse calcs to derive y0, as shown further below -----
+y1 = (y0-trce[ trc ].miny) * scaley * trace_scaley - d_midy * scaley;		//forward
+
+py = nearbyint( trace_midy - y1 + trace_offy + positiony + plot_offsy );	//forward
+
+
+==> we need to derive 'y0', so REVERSE calcs with stages below:
+
+-y1 / scaley  = y0 * trace_scaley - d_midy;								//need y0, stage 1, reversing of this: 'y1 = y0 * scaley * trace_scaley - d_midy * scaley'
+-y1 / scaley + d_midy = (y0-trce[ trc ].miny) * trace_scaley;			//need y0, stage 2, reversing of this: 'y1 = y0 * scaley * trace_scaley - d_midy * scaley'
+(-y1 / scalex + d_midy) / trace_scaley = y0;							//need y0, stage 2, reversing of this: 'y1 = y0 * scaley * trace_scaley - d_midy * scaley'
+
+(-y1 / scaley + d_midy) / trace_scaley = y0;							//need y0, stage 3, reversing of this: 'y1 = y0 * scaley * trace_scaley - d_midy * scaley'
+
+solution:  y0 = (-y1 / scaley + d_midy) / trace_scaley;					//use this
+//-------------
+*/
+
+
+
+
+
+double x0, y0, x1, y1;
+
+
+x1 = px - trace_midx - trace_offx - positionx - plot_offsx;				//need x0, reverse of this req: 'px = nearbyint( trace_midx + x1 + trace_offx + positionx + plot_offsx )'
+x0 = (x1 / scalex + d_midx) / trace_scalex + trce[ trc ].minx;
+
+y1 = py - trace_midy - trace_offy - positiony - plot_offsy;				//need y0, reverse of this req: 'py = nearbyint( trace_midy - y1 + trace_offy + positiony + plot_offsy )'
+y0 = (-y1 / scaley + d_midy) / trace_scaley;
+
+			
+
+valx = x0;
+valy = y0;
+
+return 1;
+
+
+
+
+
+
+
+/*
+
+px = mousex_internal;
+py = mousey_internal;
+
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+if( trce[ trc ].pnt.size() < 2 ) return 0;
+
+int left_idx, right_idx;
+
+if( !get_left_edge_sample_idx( trc, left_idx ) ) return 0;
+if( !get_right_edge_sample_idx( trc, right_idx ) ) return 0;
+
+if( left_idx < 0 ) left_idx = 0;
+if( left_idx >= trce[ trc ].pnt.size() ) left_idx = trce[ trc ].pnt.size() - 1;
+
+if( right_idx < 0 ) right_idx = 0;
+if( right_idx >= trce[ trc ].pnt.size() ) right_idx = trce[ trc ].pnt.size() - 1;
+
+double x1 = trce[ trc ].pnt[ left_idx ].x;
+double x2 = trce[ trc ].pnt[ right_idx ].x;
+
+
+
+
+
+double xmin, xmax, ymin, ymax;
+get_trace_min_max( trc, xmin, xmax, ymin, ymax );
+
+//printf("mgraph::get_pixel_position_as_trc_values() - ymin %f %f  posx %f  plot_offsx %f\n", ymin, ymax, trce[ trc ].posx, trce[ trc ].plot_offsx );
+
+
+int offx, offy;
+get_trace_offsxy( trc, offx, offy );
+
+
+
+int wid, hei;
+//get_vis_dimensions( wid, hei );
+get_trace_vis_dimensions( trc, wid, hei );
+
+valx = x1 + (x2 - x1) * ( (float)(px - offx) / wid );
+
+//mx -= trce[ trc ].posx;
+
+
+
+
+
+
+
+
+//offy = trce[ trc ].border_left;
+
+
+get_background_offsxy( offx, offy );
+
+//printf( "get_pixel_position_as_trc_values() -  px %d %d  offsy %d\n", px, py, offy );
+//printf( "get_pixel_position_as_trc_values() -  x1 %f  x2 %f\n", x1, x2 );
+
+
+get_background_dimensions( wid, hei );
+
+float scle_trc_y = trce[trc].scaley;
+
+
+//float ctrly = (float)(my ) / (gph[ ii ]->h() - offy) ;
+float ctrly = (float)( py - offy ) / (hei) ;
+
+//double dposy;
+//gph[ ii ]->get_posx_relative_to_trace( 0, dposy );
+
+float yunits_pp = trce[trc].yunits_perpxl;
+
+float shfty = trce[trc].posy * yunits_pp / scle_trc_y;
+
+//float vis_maxy = (gph[ ii ]->h() - offy) * yunits_pp / scle_trc_y;
+float vis_maxy = (hei) * yunits_pp / scle_trc_y;
+
+
+float vis_miny = -vis_maxy / 2.0f;
+
+valy = vis_miny + vis_maxy * (1.0f - ctrly) - shfty;
+
+//printf( "get_pixel_position_as_trc_values() -  valx %f %f\n", valx, valy );
+*/
 
 return 1;
 }
@@ -10150,14 +11265,16 @@ return 1;
 
 
 
+/*
+
 // 'px, py' are pixel coords
 // 'valx, valy' are values the pixel coords would translate to on trace
 bool mgraph::get_pixel_position_as_trc_values( int trc, int px, int py, double &valx, double &valy )
 {
 	
-	
-px = mousex;
-py = mousey;
+
+px = mousex_internal;
+py = mousey_internal;
 
 if ( trce.size() == 0 ) return 0;
 
@@ -10248,7 +11365,7 @@ valy = vis_miny + vis_maxy * (1.0f - ctrly) - shfty;
 return 1;
 }
 
-
+*/
 
 
 
@@ -10590,6 +11707,562 @@ return 0;
 
 
 
+//'idx' is sample index
+//'px', 'py' must be in mouse domain, 'woffx' and 'woffy' are NOT incorperated in calc, these will be converted to be in sample value domain, then dist is calc'd 
+//'dist' will be set to the numerical dist of sample's x,y values to the conv'd 'px' 'py' vals  
+//returns distance
+bool mgraph::get_distance_of_index_to_pixel_coord( int trc, unsigned int idx, int px, int py, double &dist )	//v1.29
+{
+dist = std::numeric_limits<double>::max();
+		
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+
+if( trce[ trc ].pnt.size() == 0 ) return 0;
+
+if( idx >= trce[ trc ].pnt.size() ) return 0;
+
+
+int wx = px;
+int wy = py;
+
+
+double x, y;
+
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+get_trace_to_plot_factors( trc, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+
+double x1 = trce[ trc ].pnt[ idx ].x;
+double y1 = trce[ trc ].pnt[ idx ].y;
+
+x = (x1-trce[ trc ].minx) * scalex * trace_scalex - d_midx * scalex;
+y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+int xx = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+int yy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+double dx = xx - wx;
+double dy = yy - wy;
+
+dist = sqrt(dx*dx + dy*dy);												//distance
+
+
+return 1;
+}
+
+
+
+
+
+
+
+//'px' is raw mouse value, e.g from: Fl::event_x(); 
+//'py' is raw mouse value
+bool mgraph::hov_nearest_sample_build( unsigned int trc, int px, int py )
+{
+	
+if( trce.size() == 0 ) return 0;
+
+if( trc >= trce.size() ) return 0;
+
+if( trce[ trc ].pnt.size() == 0 )  return 0;
+
+vhov_nearest_sample_idx.clear();
+
+hov_nearest_sample_trc = trc;
+
+hov_nearest_sample_idx = trce[ trc ].mousex_low_sample_idx;
+
+if( hov_nearest_sample_range == 0 )
+	{
+	vhov_nearest_sample_idx.push_back( trce[ trc ].mousex_low_sample_idx );
+	}
+
+int idx = hov_nearest_sample_idx - hov_nearest_sample_range;			//start at lower range
+
+for( int i = 0; i < ( hov_nearest_sample_range * 2 ) + 1; i++ )			//collect two times the range + 1
+	{
+	if( ( idx >= 0 ) && ( idx < trce[ trc ].pnt.size() ) )
+		{
+		vhov_nearest_sample_idx.push_back( idx );
+		}
+	idx++;
+	}
+		
+//printf("mgraph::hov_nearest_sample_build() -  trce[ trc ].mousex_low_sample_idx %d %d\n", trce[ trc ].mousex_low_sample_idx, trce[ trc ].mousex_high_sample_idx );  
+
+//printf("mgraph::hov_nearest_sample_build() -  vhov_nearest_sample_idx %d\n", vhov_nearest_sample_idx.size() );
+
+return 1;
+
+}
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+//v1.31 fixed problem where only a trc[0] sample was selectable, i.e. problem caused samples on trc[1] etc not being selectable
+//'min_trc'  set this to 0 on your first call for first trace, subsequent calls will adj if a closer match occurs
+//'min_idx'  set this to -1 on your first call for first trace, first or subsequent calls will adj when a closer match occurs
+//'min_dist' set to 'std::numeric_limits<double>::max()' on your first call for first trace, first or subsequent calls will adj when a closer match occurs
+
+
+//v1.29 improved, to handle polar plots, e.g: where 'x' vals are going in a plus direction even though their 'x' indexes are stepping lower, such as:  x[8]=1.0   x[7]=1.2  x[6]=1.4, as can happen in a simple circle plot
+//v1.29 also tests to ensure calc'd indexes are nearest in the y domain as there may be multiple 'x' domain matches with circle/lissajous plots
+
+//NOTE: NOT for external calling,
+//using mouse pos, find if a sample was within a wnd around mouse pos, if so return sample's details (in either:  'trce[ i ].selected_idx'  or  'trce[ i ].hover_sample_idx' )
+
+//v1.08... this function is called by either FL_MOVE, FL_PUSH events, if FL_MOVE event was caller 'get_as_hover' will be set, so that so only 'trce[ i ].hover_sample_idx' is modified
+
+//if 'get_as_hover' is zero, it will set 'selected_idx' and also
+bool mgraph::get_mouse_vals_internal( int trc, int mx, int my, double &xx, double &yy, bool get_as_hover, int &min_trc, int &min_idx, double &min_dist )
+{
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+
+if( trce[ trc ].pnt.size() == 0 ) return 0;								//v1.29
+
+int i = trc;
+
+
+if( get_as_hover ) trce[ i ].hover_sample_idx = -1;
+else trce[ i ].selected_idx = -1;
+
+trce[ i ].mousex_low_sample_idx = -1;
+trce[ i ].mousex_high_sample_idx = -1;
+
+
+int msex = mx;// + woffx;												//mouse widget coord
+int msey = my;// + woffy;
+
+
+double x, y;
+
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+get_trace_to_plot_factors( i, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+
+//	min_dist = std::numeric_limits<double>::max();						//this is now done by caller
+//	double miny0 = minx0;
+//	min_idx = -1;														//this is now done by caller
+	int min_xx;
+	int min_yy;
+
+	if( trce[ i ].vis )
+		{
+		for( int j = 0; j < trce[ i ].pnt.size(); j++ )			//cycle each coord point
+			{
+			double x1 = trce[ i ].pnt[ j ].x;
+			double y1 = trce[ i ].pnt[ j ].y;
+
+//			x = (x1) * scalex * trace_scalex - d_midx * scalex;
+			x = (x1-trce[ i ].minx) * scalex * trace_scalex - d_midx * scalex;	//v1.16
+			y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+			int xx = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+			int yy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+
+			double dx = xx - msex;
+			double dy = yy - msey;
+			
+			double dist = sqrt(dx*dx + dy*dy);							//distance
+			
+			if( dist < min_dist ) 
+				{
+//				printf("get_mouse_vals_internal() - trc %d,  xx %f %f\n", i, xx, yy );
+				min_trc = i;
+				min_idx = j;
+				min_dist = dist;										//keep smallest
+				min_xx = xx;
+				min_yy = yy;
+				}
+			
+			
+//			int left =  xx - rect_size_sel / 2;							//v1.31
+//			int top =  yy - rect_size_sel / 2;
+
+
+//			int right =  left + rect_size_sel;							//v1.31
+//			int bot = top + rect_size_sel;
+			}
+
+		}
+
+
+	if( min_idx != -1 )													//check distance either side of 'min_idx' to derive an encompassing index pair
+		{
+		double dist_lower = std::numeric_limits<double>::max();
+		double dist_upper = std::numeric_limits<double>::max();
+		
+		if( (min_idx - 1) >= 0 )
+			{
+			get_distance_of_index_to_pixel_coord( trc, min_idx - 1, msex, msey, dist_lower );
+			}
+
+		if( (min_idx + 1) < trce[ i ].pnt.size() )
+			{
+			get_distance_of_index_to_pixel_coord( trc, min_idx + 1, msex, msey, dist_upper );
+			}
+
+
+		
+		int min_idx2 = min_idx;
+		if( dist_lower < dist_upper ) min_idx2 = min_idx - 1;
+		else min_idx2 = min_idx + 1;
+//		printf( "get_mouse_vals_internal() - trc %d, min_idx: %d   min_idx2: %d       %f    %f \n", trc, min_idx, min_idx2, dist_lower, dist_upper );
+
+		trce[ trc ].mousex_low_sample_idx = min_idx;
+		trce[ trc ].mousex_high_sample_idx = min_idx2;
+
+//printf("mgraph::get_mouse_vals_internal() - trce %d:  min_idx %d %d\n", i, min_idx, min_idx2 );
+
+		if( get_as_hover ) 
+			{
+			hover_trace_idx = 1;//min_trc;
+			if( hover_trace_idx < 0 ) hover_trace_idx = 0;
+			
+			trce[ trc ].hover_sample_idx = min_idx;
+//	printf("zzzzzzzzzzzzzzzzzzzzzzz mgraph::get_mouse_vals_internal()   trce[ trc ].hover_sample_idx %d\n", trce[ trc ].hover_sample_idx );
+			}
+		else{
+//			trce[ trc ].selected_idx = min_idx;
+//			int idx = min_idx;
+
+//			if( trce[ trc ].selected_idx != -1 )
+				
+			xx = min_xx;
+			yy = min_yy;
+
+			int left =  xx - rect_size_sel / 2;							//v1.31
+			int top =  yy - rect_size_sel / 2;
+
+			int right =  left + rect_size_sel;							//v1.31
+			int bot = top + rect_size_sel;
+
+//		printf( "get_mouse_vals_internal() - poissble inside trc %d, min_idx: %d  \n", trc, min_idx );
+
+			if( ( ( msex ) >= left ) && (( msex ) <=  right ) )			//mouse sitting within a bounding rect of sample ?
+				{
+				if( ( ( msey )  >= top ) && ( ( msey ) <=  bot ) )
+					{
+//		printf( "get_mouse_vals_internal() - inside trc %d, min_idx: %d  \n", trc, min_idx );
+					trce[ trc ].selected_idx = min_idx;
+
+					trce[ trc ].selected_pixel_rect_left = xx - rect_size_sel;	//v1.31
+					trce[ trc ].selected_pixel_rect_wid = rect_size;
+					trce[ trc ].selected_pixel_rect_top = yy - rect_size_sel;	//v1.31
+					trce[ trc ].selected_pixel_rect_hei = rect_size;
+					}
+				else{
+//		printf( "get_mouse_vals_internal() - outside trc %d, min_idx: %d  \n", trc, min_idx );
+					min_idx = -1;										//v1.31, flag not in bounds
+					}
+				}
+			else{
+				min_idx = -1;											//v1.31, flag not in bounds
+				}
+				
+
+
+		//		printf( "get_mouse_vals_internal() - pressed sample on trace: %d, selected_idx: %d\n", i, trce[ i ].selected_idx );
+//				return 1;
+			}
+
+		}
+
+if( min_idx != -1 ) return 1;
+else return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+//v1.29 improved, to handle polar plots, e.g: where 'x' vals are going in a plus direction even though their 'x' indexes are stepping lower, such as:  x[8]=1.0   x[7]=1.2  x[6]=1.4, as can happen in a simple circle plot
+//v1.29 also tests to ensure calc'd indexes are nearest in the y domain as there may be multiple 'x' domain matches with circle/lissajous plots
+
+//NOTE: NOT for external calling,
+//using mouse pos, find if a sample was within a wnd around mouse pos, if so return sample's details (in either:  'trce[ i ].selected_idx'  or  'trce[ i ].hover_sample_idx' )
+
+//v1.08... this function is called by either FL_MOVE, FL_PUSH events, if FL_MOVE event was caller 'get_as_hover' will be set, so that so only 'trce[ i ].hover_sample_idx' is modified
+
+//if 'get_as_hover' is zero, it will set 'selected_idx' and also
+bool mgraph::get_mouse_vals_internal( int trc, int mx, int my, double &xx, double &yy, bool get_as_hover )
+{
+if ( trce.size() == 0 ) return 0;
+
+if ( trc < 0 ) return 0;
+if( trc >= trce.size() ) return 0;
+
+
+if( trce[ trc ].pnt.size() == 0 ) return 0;								//v1.29
+
+int i = trc;
+
+
+if( get_as_hover ) trce[ i ].hover_sample_idx = -1;
+else trce[ i ].selected_idx = -1;
+
+trce[ i ].mousex_low_sample_idx = -1;
+trce[ i ].mousex_high_sample_idx = -1;
+
+
+int msex = mx + woffx;													//mouse widget coord
+int msey = my + woffy;
+
+
+double x, y;
+
+
+int trace_offx, trace_offy, plot_offsx, plot_offsy;
+double trace_scalex, d_midx, scalex, trace_midx, positionx, trace_scaley, d_midy, scaley, trace_midy, positiony;
+
+get_trace_to_plot_factors( i, trace_scalex, d_midx, scalex, trace_midx, trace_offx, positionx, plot_offsx,   trace_scaley, d_midy, scaley, trace_midy, trace_offy, positiony, plot_offsy );
+
+
+	double min_dist = std::numeric_limits<double>::max();
+//	double miny0 = minx0;
+	int min_idx = -1;
+	int min_xx;
+	int min_yy;
+
+	if( trce[ i ].vis )
+		{
+		for( int j = 0; j < trce[ i ].pnt.size(); j++ )			//cycle each coord point
+			{
+			double x1 = trce[ i ].pnt[ j ].x;
+			double y1 = trce[ i ].pnt[ j ].y;
+
+//			x = (x1) * scalex * trace_scalex - d_midx * scalex;
+			x = (x1-trce[ i ].minx) * scalex * trace_scalex - d_midx * scalex;	//v1.16
+			y = y1 * scaley * trace_scaley - d_midy * scaley;
+
+			int xx = nearbyint( trace_midx + x + trace_offx + positionx + plot_offsx );
+			int yy = nearbyint( trace_midy - y + trace_offy + positiony + plot_offsy );
+
+
+			double dx = xx - msex;
+			double dy = yy - msey;
+			
+			double dist = sqrt(dx*dx + dy*dy);							//distance
+			
+			if( dist < min_dist ) 
+				{
+				min_idx = j;
+				min_dist = dist;						//keep smallest
+				min_xx = xx;
+				min_yy = yy;
+				}
+			
+			
+			int left =  xx - rect_size / 2;
+			int top =  yy - rect_size / 2;
+
+
+			int right =  left + rect_size;
+			int bot = top + rect_size;
+
+		
+			//check if sample's X value is beyond mousex (note these value are overwritten further below if mouse is actually within a sample's rect)
+//			if( ( trce[ i ].mousex_low_sample_idx == -1 ) & ( xx > ( mx + woffx ) ) )
+//				{
+//				trce[ i ].mousex_low_sample_idx = j - 1;
+//				trce[ i ].mousex_high_sample_idx = j;
+
+//				if( trce[ i ].mousex_low_sample_idx == -1 )			//left of first sample?
+//					{
+//					trce[ i ].mousex_low_sample_idx = 0;		
+//					trce[ i ].mousex_high_sample_idx = 0;
+//					}
+//if( i == 0 )printf("j: %d, grrr %d %d\n", j, trce[ i ].mousex_low_sample_idx, trce[ i ].mousex_high_sample_idx );
+//				}
+
+			//check if mouse within a sample point
+//			if( ( ( mx + woffx ) >= left ) && (( mx + woffx ) <=  right ) )
+//				{
+
+//				if( ( ( my + woffy )  >= top ) && ( ( my + woffy ) <=  bot ) )
+//					{
+//					trce[ i ].mousex_low_sample_idx = j;
+//					trce[ i ].mousex_high_sample_idx = j + 1;
+
+//					if( trce[ i ].mousex_high_sample_idx >= trce[ i ].pnt.size() ) trce[ i ].mousex_high_sample_idx = j;	//bounds limit
+
+//					if( get_as_hover ) 
+//						{
+//printf("zzzzzzzzzzzzzzzzzzzzzzz mgraph::get_mouse_vals_internal() hov j: %d\n", j );
+//exit(0);
+//						hover_trace_idx = i;
+//						trce[ i ].hover_sample_idx = j;
+//						}
+//					else{
+//						trce[ i ].selected_idx = j;
+
+//						trce[ i ].selected_pixel_rect_left = left;
+//						trce[ i ].selected_pixel_rect_wid = rect_size;
+//						trce[ i ].selected_pixel_rect_top = top;
+//						trce[ i ].selected_pixel_rect_hei = rect_size;
+//						}
+//					break;
+//					}
+//				}
+
+			}
+
+		}
+
+
+	if( min_idx != -1 )													//check distance either side of 'min_idx' to derive an encompassing index pair
+		{
+		double dist_lower = std::numeric_limits<double>::max();
+		double dist_upper = std::numeric_limits<double>::max();
+		
+		if( (min_idx - 1) >= 0 )
+			{
+			get_distance_of_index_to_pixel_coord( trc, min_idx - 1, msex, msey, dist_lower );
+			}
+
+		if( (min_idx + 1) < trce[ i ].pnt.size() )
+			{
+			get_distance_of_index_to_pixel_coord( trc, min_idx + 1, msex, msey, dist_upper );
+			}
+
+
+		
+		int min_idx2 = min_idx;
+		if( dist_lower < dist_upper ) min_idx2 = min_idx - 1;
+		else min_idx2 = min_idx + 1;
+//		printf( "get_mouse_vals_internal() - min_idx: %d   min_idx2: %d       %f    %f \n", min_idx, min_idx2, dist_lower, dist_upper );
+
+		trce[ trc ].mousex_low_sample_idx = min_idx;
+		trce[ trc ].mousex_high_sample_idx = min_idx2;
+
+//printf("mgraph::get_mouse_vals_internal() - trce %d:  min_idx %d %d\n", i, min_idx, min_idx2 );
+
+		if( get_as_hover ) 
+			{
+	//exit(0);
+			hover_trace_idx = trc;
+			trce[ trc ].hover_sample_idx = min_idx;
+//	printf("zzzzzzzzzzzzzzzzzzzzzzz mgraph::get_mouse_vals_internal()   trce[ trc ].hover_sample_idx %d\n", trce[ trc ].hover_sample_idx );
+			}
+		else{
+//			trce[ trc ].selected_idx = min_idx;
+//			int idx = min_idx;
+
+//			if( trce[ trc ].selected_idx != -1 )
+				
+			xx = min_xx;
+			yy = min_yy;
+
+			int left =  xx - rect_size / 2;
+			int top =  yy - rect_size / 2;
+
+			int right =  left + rect_size;
+			int bot = top + rect_size;
+
+			if( ( ( msex ) >= left ) && (( msex ) <=  right ) )			//mouse sitting within a bounding rect of sample ?
+				{
+				if( ( ( msey )  >= top ) && ( ( msey ) <=  bot ) )
+					{
+					trce[ trc ].selected_idx = min_idx;
+
+					trce[ trc ].selected_pixel_rect_left = left;
+					trce[ trc ].selected_pixel_rect_wid = rect_size;
+					trce[ trc ].selected_pixel_rect_top = top;
+					trce[ trc ].selected_pixel_rect_hei = rect_size;
+					}
+				}
+				
+
+
+		//		printf( "get_mouse_vals_internal() - pressed sample on trace: %d, selected_idx: %d\n", i, trce[ i ].selected_idx );
+//				return 1;
+			}
+
+		}
+
+
+
+//if( trce[ i ].mousex_low_sample_idx == -1 )					//no left/right found, then assume past right sample and use its idx
+//	{
+//	trce[ i ].mousex_low_sample_idx = trce[ i ].pnt.size() - 1;
+//	trce[ i ].mousex_high_sample_idx = trce[ i ].mousex_low_sample_idx;
+//	}
+
+
+
+//if( !get_as_hover )
+//	{
+//	int idx = trce[ i ].selected_idx;
+
+//	if( trce[ i ].selected_idx != -1 )
+//		{
+//		xx = trce[ i ].pnt[ idx ].x;
+//		yy = trce[ i ].pnt[ idx ].y;
+
+//		printf( "get_mouse_vals_internal() - pressed sample on trace: %d, selected_idx: %d\n", i, trce[ i ].selected_idx );
+//		return 1;
+//		}
+//	}
+
+
+if( min_idx != -1 ) return 1;
+else return 0;
+}
+
+*/
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10601,7 +12274,7 @@ return 0;
 
 //v1.08... this function is called by either FL_MOVE, FL_PUSH events, if FL_MOVE event was caller 'get_as_hover' will be set, so that so only 'trce[ i ].hover_sample_idx' is modified
 
-bool mgraph::get_mouse_vals_internal( int trc, int mx, int my, double &xx, double &yy, bool get_as_hover )
+bool mgraph::get_mouse_vals_internal_old( int trc, int mx, int my, double &xx, double &yy, bool get_as_hover )
 {
 if ( trce.size() == 0 ) return 0;
 
@@ -10880,7 +12553,7 @@ get_trace_to_plot_factors( i, trace_scalex, d_midx, scalex, trace_midx, trace_of
 
 					if( get_as_hover ) 
 						{
-//printf("hov i: %d\n", i );
+//printf("zzzzzzzzzzzzzzzzzzzzzzz mgraph::get_mouse_vals_internal() hov j: %d\n", j );
 //exit(0);
 						hover_trace_idx = i;
 						trce[ i ].hover_sample_idx = j;
@@ -11247,7 +12920,7 @@ return 1;
 
 void mgraph::resize( int xx, int yy, int ww, int hh )
 {
-rect_size = 10 / 2;
+//rect_size = cn_mgraph_rect_size / 2;
 
 woffx = xx;
 woffy = yy;
@@ -11305,21 +12978,42 @@ if ( e & FL_MOVE )
 	int msex = Fl::event_x();
 	int msey = Fl::event_y();
 	
+	mousex = Fl::event_x() - x();										//v1.26, relative to widget dim
+	mousey = Fl::event_y() - y();
+
+	
 	bool mse_mve = 0;
 	
-	if( msex != mousex ) mse_mve = 1;
-	if( msey != mousey ) mse_mve = 1;
+	if( msex != mousex_internal ) mse_mve = 1;
+	if( msey != mousey_internal ) mse_mve = 1;
 	
-	mousex = msex;
-	mousey = msey;
+	mousex_internal = msex;
+	mousey_internal = msey;
 
 	if ( inside_control )
 		{
         hover_trace_idx = -1;															//this is set in: get_mouse_vals_internal()
 
+		int min_trc = 0;												//this will be adj'd if a closer match occurs
+		int min_idx = -1;												//this will be adj'd if a closer match occurs
+		double min_dist = std::numeric_limits<double>::max();			//this will be adj'd if a closer match occurs
+
+		for( int i = 0; i < trce.size(); i++ )							//cycle all traces to find closet sample
+			{
+			get_mouse_vals_internal( i, mousex_internal, mousey_internal, xx, yy, 1, min_trc, min_idx, min_dist );
+			
+//			if( get_mouse_vals_internal( i, mousex_internal, mousey_internal, xx, yy, 0 ) )   //find if a sample is within a wnd around mouse pos, if so get sample's details
+			   {
+//			   last_clicked_trace = i;
+//			   break;
+			   }
+			}
+
+//		printf( "min_trc: %d  min_idx %d   min_dist %f\n", min_trc, min_idx, min_dist );
+		
         for( int i = 0; i < trce.size(); i++ )
             {
-			get_mouse_vals_internal( i, mousex - woffx, mousey - woffy, xx, yy, 1 );	   //find if a sample is within a wnd around mouse pos, set 'hov_sample_idx' in 'trace_tag'
+//			get_mouse_vals_internal( i, mousex_internal - woffx, mousey_internal - woffy, xx, yy, 1, min_trc, min_idx, min_dist );	   //find if a sample is within a wnd around mouse pos, set 'hov_sample_idx' in 'trace_tag'
 
 
 			if( trce[ i ].mousemove_cb_p_callback )
@@ -11333,17 +13027,17 @@ if ( e & FL_MOVE )
 				int grat_wid = w() - graticule_reductionx;
 				int grat_hei = h() - graticule_reductiony;
 
-				if( ( mousex >= grat_offx ) & ( mousex <= grat_offx + grat_wid ) )
+				if( ( mousex_internal >= grat_offx ) & ( mousex_internal <= grat_offx + grat_wid ) )
 					{
-					if( ( mousey >= grat_offy ) & ( mousey <= grat_offy + grat_hei ) )
+					if( ( mousey_internal >= grat_offy ) & ( mousey_internal <= grat_offy + grat_hei ) )
 						{
-						last_mousex = mousex - grat_offx;								//express mouse xpos as value between (left) 0 -->??(right)
-						last_mousey = mousey - grat_offy;								//express mouse xpos as value between (top) 0 -->??(botm)
+						last_mousex = mousex_internal - grat_offx;								//express mouse xpos as value between (left) 0 -->??(right)
+						last_mousey = mousey_internal - grat_offy;								//express mouse xpos as value between (top) 0 -->??(botm)
 						last_nomalised_mousex = 2.0 * (double)last_mousex / (double)grat_wid - 1.0;	 	//express mouse xpos as value between (left)-1.0 --> 0.0 --> +1.0 (right)
 						last_nomalised_mousey = -(2.0 * (double)last_mousey / (double)grat_hei - 1.0);	//express mouse ypos as value between (botm)-1.0 --> 0.0 --> +1.0 (top)
 
 						trce[ i ].mousemove_cb_p_callback( trce[ i ].mousemove_cb_args, last_mousex,  last_mousey, last_nomalised_mousex, last_nomalised_mousey );
-
+						if( b_show_hov_nearest_sample ) hov_nearest_sample_build( min_trc, mousex_internal, mousey_internal );
 
 						}
 					}
@@ -11351,6 +13045,13 @@ if ( e & FL_MOVE )
             }
 		if( mse_mve ) mousemove_cnt++;	//v1.22
 
+
+//		mousex = msex;													//v1.26, relative to widget dim
+//		mousey = msey;
+
+//		mousex = Fl::event_x() - woffx;									//v1.26, relative to widget dim
+//		mousey = Fl::event_y() - woffy;
+	
         need_redraw = 1;
         dont_pass_on = 1;
         }
@@ -11359,28 +13060,37 @@ if ( e & FL_MOVE )
 
 if ( e == FL_PUSH )	
 	{
-	mousex = Fl::event_x() - woffx;
-	mousey = Fl::event_y() - woffy;
-	double_click_left = Fl::event_clicks();
+	mousex_internal = Fl::event_x();// - woffx;
+	mousey_internal = Fl::event_y();// - woffy;
+
+	mousex = Fl::event_x() - x();										//v1.26, relative to widget dim
+	mousey = Fl::event_y() - y();
 
     last_clicked_trace = -1;
+    
+    
+	double_click = Fl::event_clicks();
 
 
 	for( int i = 0; i < trce.size(); i++ )								//toggle sample rectangle hinting
 		{
-		if( double_click_left == 2 )
+		if( double_click == 2 )
 			{
 			if( trce[ i ].sample_rect_hints_double_click ) sample_rect_showing[ i ] = !sample_rect_showing[ i ];		//v1.22
 			}
 		}
 
-	for( int i = 0; i < trce.size(); i++ )
+	int min_trc = 0;												//this will be adj'd if a closer match occurs
+	int min_idx = -1;												//this will be adj'd if a closer match occurs
+	double min_dist = std::numeric_limits<double>::max();			//this will be adj'd if a closer match occurs
+		
+	for( int i = 0; i < trce.size(); i++ )							//cycle all traces to find closet sample
 		{
-        if( get_mouse_vals_internal( i, mousex, mousey, xx, yy, 0 ) )   //find if a sample is within a wnd around mouse pos, if so get sample's details
-            {
-            last_clicked_trace = i;
-            break;
-            }
+        if( get_mouse_vals_internal( i, mousex_internal, mousey_internal, xx, yy, 0, min_trc, min_idx, min_dist ) )   //find if a sample is within a wnd around mouse pos, if so get sample's details
+           {
+           last_clicked_trace = i;
+           break;
+           }
         }
 
 
@@ -11388,6 +13098,8 @@ if ( e == FL_PUSH )
     if( Fl::event_button() == 1 )
         {
 		left_button = 1;
+
+		double_click_left = double_click;
 
         if( double_click_left == 0 )
             {
@@ -11399,11 +13111,30 @@ if ( e == FL_PUSH )
         }
 
 
+    if( Fl::event_button() == 2 )										//v1.26
+        {
+		middle_button = 1;
+
+		double_click_middle = double_click;
+
+        if( double_click_left == 0 )
+            {
+            if( middle_click_anywhere_cb_p_callback ) middle_click_anywhere_cb_p_callback( middle_click_anywhere_cb_args );
+            }
+        else{
+            if( middle_double_click_anywhere_cb_p_callback ) middle_double_click_anywhere_cb_p_callback( middle_double_click_anywhere_cb_args );
+            }
+        }
+
+
 
     if( Fl::event_button() == 3 )
         {
 		right_button = 1;
-        if( double_click_left == 0 )
+
+		double_click_right = double_click;
+
+       if( double_click_left == 0 )
             {
             if( right_click_anywhere_cb_p_callback ) right_click_anywhere_cb_p_callback( right_click_anywhere_cb_args );
             }
@@ -11440,7 +13171,7 @@ if ( e == FL_PUSH )
                 if( trce[ i ].middle_click_cb_p_callback ) trce[ i ].middle_click_cb_p_callback( trce[ i ].middle_click_cb_args );
                 }
             else{
-//                if( trce[ i ].left_double_click_cb_p_callback ) trce[ i ].left_double_click_cb_p_callback( trce[ i ].left_double_click_cb_args );
+                if( trce[ i ].middle_double_click_cb_p_callback ) trce[ i ].middle_double_click_cb_p_callback( trce[ i ].middle_double_click_cb_args );
                 }
             }
 
@@ -11479,6 +13210,7 @@ if ( e == FL_RELEASE )
 	if( Fl::event_button() == 2 )
 		{
 		middle_button = 0;
+        if( middle_click_release_cb_p_callback ) middle_click_release_cb_p_callback( middle_click_release_cb_args );
 		}
 
     if( Fl::event_button() == 3 )
@@ -11497,6 +13229,12 @@ if ( e == FL_RELEASE )
 if ( ( e == FL_KEYDOWN ) || ( e == FL_SHORTCUT ) )						//key press?
 	{
 	int key = Fl::event_key();
+
+	last_key = key;														//v1.27
+
+	if( ( key == FL_Control_L ) || ( key == FL_Control_R) ) control_key = 1;
+	if( ( key == FL_Shift_L ) || ( key == FL_Shift_R) ) shift_key = 1;
+		
 	for( int i = 0; i < trce.size(); i++ )
 		{
         if( trce[ i ].keydown_cb_p_callback ) trce[ i ].keydown_cb_p_callback( trce[ i ].keydown_cb_args, key );
@@ -11509,6 +13247,10 @@ if ( ( e == FL_KEYDOWN ) || ( e == FL_SHORTCUT ) )						//key press?
 if ( ( e == FL_KEYUP) || ( e == FL_SHORTCUT ) )							//key release?
 	{
 	int key = Fl::event_key();
+
+	if( ( key == FL_Control_L ) || ( key == FL_Control_R) ) control_key = 0;
+	if( ( key == FL_Shift_L ) || ( key == FL_Shift_R) ) shift_key = 0;
+
 	for( int i = 0; i < trce.size(); i++ )
 		{
         if( trce[ i ].keyup_cb_p_callback ) trce[ i ].keyup_cb_p_callback( trce[ i ].keyup_cb_args, key );
@@ -11522,15 +13264,15 @@ if ( e == FL_MOUSEWHEEL )
 	{
 	if ( inside_control )
 		{
-        int dir = Fl::event_dy();
+        mouse_dir = Fl::event_dy();
                 
-        if( b_invert_wheel ) dir = -dir;
+        if( b_invert_wheel ) mouse_dir = -mouse_dir;
         
-		mousewheel += dir;
+		mousewheel += mouse_dir;
 
         for( int i = 0; i < trce.size(); i++ )
             {
-            if( trce[ i ].mousewheel_cb_p_callback ) trce[ i ].mousewheel_cb_p_callback( trce[ i ].mousewheel_cb_args, dir );
+            if( trce[ i ].mousewheel_cb_p_callback ) trce[ i ].mousewheel_cb_p_callback( trce[ i ].mousewheel_cb_args, mouse_dir );
             }
         need_redraw = 1;
         dont_pass_on = 1;
@@ -11675,7 +13417,13 @@ st += s1;
 s1 = "Press 'a' on a trace and spin mousewheel to change its amplitude (y scaling), 'z' will force any trace scaling to unity.\n";
 st += s1;
 
-s1 = "Press 'y' and spin mousewheel to change y position of trace, on a per trace basis ('z' to restore).\n\nClick 2 sample points in succession to see delta x,y and Hz.\n";
+s1 = "Press 'y' and spin mousewheel to change y position of trace, on a per trace basis ('z' to restore).\n\n";
+st += s1;
+
+s1 = "Press 'p' to toggle plot pause.\n\n";
+st += s1;
+
+s1 = "Click 2 sample points in succession to see delta x,y and Hz.\n";
 st += s1;
 
 s1 = "Tripple click to toggle rectangle hinting of all sample points.";
@@ -12012,10 +13760,10 @@ o->get_posx( 0, p->drag_start_posx );
 
 
 
-
-//adj params so graph trace is visible
+//adj params so graph trace is visible - SEE ALSO 'fit_plot_to_y_range()'
 void fast_mgraph::fit_plot( int grph_idx )
 {
+bool vb = 0;
 
 int ii = 0;
 
@@ -12027,14 +13775,16 @@ if( grph_idx >= 0 )		//multiple graphs?
 
 	int samp_idx;
 	int sel_trc = gph[ii]->get_selected_trace_and_sample_indexes( samp_idx );
-	
+
 	int iw, ih;
 	gph[ii]->get_trace_vis_dimensions( 0, iw, ih );
 	
 	double xmin, xmax, ymin, ymax;
 	gph[ii]->get_trace_min_max( 0, xmin, xmax, ymin, ymax );
 
-	gph[ii]->set_scaley( 0, 1.0f, 1 );										//first remove any 'a' key scaling
+if(vb)printf("fast_mgraph::fit_plot() - xmin %f %f   ymin %f %f\n", xmin, xmax, ymin, ymax );
+
+	gph[ii]->set_scaley( 0, 1.0f, 1 );									//first remove any 'a' key scaling
 	scale_trc_y[ii][0] = 1.0f;
 
 	gph[ii]->set_posy( 0, shift_trc_y[ii][0], 1 );
@@ -12043,21 +13793,245 @@ if( grph_idx >= 0 )		//multiple graphs?
 	float middley = dy/2 + ymin;										//find mid point
 
 
-	max_defl_y[ii] = dy/2.0f * 1.2f;									//set a max range just over actual max range
+if(vb)printf("fast_mgraph::fit_plot() - dy %f %f\n", dy, middley );
+
+
+	//----- work out range to use for y scale and y ticks --------
+	double extremey = fabs(ymax);
+	if( fabs( ymax ) < fabs(ymin) ) extremey = fabs(ymin);				//get which 'y' deflection is greater
+
+	double range_min =  y_tick_range[0];
+	double range_max =  y_tick_range[cn_fast_graph_y_tick_range_size - 1];
+	
+	double range_factor = 1;
+	int rnge_cnt = 0;
+	
+//	extremey = 1e309L;
+//extremey = 0.03;
+	y_tick_range_scale[ ii ] = 1.0;										//set something here incase below code fails to change it
+
+	double wnd = 0.020;													//allow a small percentage overshoot to avoid going into next range
+	if( ( extremey > std::numeric_limits<double>::min() ) && ( extremey < std::numeric_limits<double>::max() ) )			//check if not near an almost zero value, or too large a num
+		{
+if(vb)printf("fast_mgraph::fit_plot() - extremey %f is wintin std::numeric_limits<double>::min() and numeric_limits<double>::max()\n", extremey );
+		for( int j = 0; j < 1000; j++ )									//scale
+			{
+			if( extremey < range_min ) range_factor = 0.1;
+			if( extremey > range_max ) range_factor = 10;
+			
+if(vb)printf("fast_mgraph::fit_plot() - range_min %f  range_max %f    range_factor %f\n", range_min, range_max, range_factor );
+
+			double range_min_wnd = range_min - range_min * wnd;			//allow a small percentage overshoot to avoid going into next range
+			double range_max_wnd = range_max + range_max * wnd;			//allow a small percentage overshoot to avoid going into next range
+			
+			if( ( extremey >= range_min_wnd ) && ( extremey <= range_max_wnd ) ) 
+				{
+				if(vb)printf("fast_mgraph::fit_plot() - found a good range: extremey %g   range_min %g   %g    rnge_cnt %d\n", extremey, range_min, range_max, rnge_cnt );
+				y_tick_range_scale[ ii ] = range_min;					//store this for scaling of 'y' tick values
+				break;
+				}
+
+			range_min *= range_factor;									//adj range
+			range_max *= range_factor;
+
+			rnge_cnt++;
+//			if(vb)printf("fast_mgraph::fit_plot() - extremey %g  range_min %g %g   loop rnge_cnt %d\n", extremey, range_min, range_max, rnge_cnt );
+			}
+		}
+	else{
+		printf("fast_mgraph::fit_plot() - extremey: %g,  is either too small or too large a value for 'y' range code to handle\n", extremey );
+		}
+
+	extremey /= range_min;							//scale by range, e.g. '30' has 'range_min'= 10  'range_max'= 100,      '0.03' has  'range_min'= 0.01  'range_max'= 0.1    (30 becomes 3, which is within 'y_tick_range[]')
+
+//	if(vb)printf("fast_mgraph::fit_plot() - scaled extremey: %g\n", extremey );
+
+	int which_range = 0;
+	for( int j = 0; j < cn_fast_graph_y_tick_range_size; j++ )			//find which 'y_tick_range[]' to use
+		{
+		if( y_tick_range[j] + y_tick_range[j] * wnd >= extremey )			//allow a small percentage overshoot to avoid going into next range
+			{
+			which_range = j;
+			if(1)printf("fast_mgraph::fit_plot() - scaled extremey: %g is in range of 'y_tick_range[%d] whose max is: %f'\n", extremey, j, y_tick_range[j] );
+			tick_range_y_build( grph_idx, which_range, 0 );
+
+			//for debug only
+			if(vb)
+				{
+				for( int i = 0; i < cn_fast_graph_y_tick_range_values_size; i++ )
+					{
+			if(vb)printf("fast_mgraph::fit_plot() - generated y_tick_range_values[%d]:  %g    when scaled becomes:   %g\n", i, y_tick_range_values[ii][i], y_tick_range_values[ii][i]*y_tick_range_scale[ ii ] );
+					}
+				}
+
+			break;	
+			}
+		}
+
+//	tick_range_y_build( which_range );
+	
+//getchar();
+
+	//------------------------------------------------------------
+	max_defl_y[ii] = 3.0;//dy/2.0f * 1.2f;								//set a max range just over actual max range
 
 	plot_grph_internal( gph[ii]->graph_id );							//need to replot graph twice (using cached vectors) as 'p->max_defl_y[ii]' has been changed
 	plot_grph_internal( gph[ii]->graph_id );							//need to replot graph twice (using cached vectors) as 'p->max_defl_y[ii]' has been changed
 
+	if( gph[ii]->trce.size() > 0 )										//v1.23
+		{
+		float shfty = 0;//-middley/gph[ii]->trce[0].yunits_perpxl;					//make a pixel val offset to center trace in the middle of its 'y' range values
+		shift_trc_y[ii][0] = 0;//shfty;									
+		}
 
-	float shfty = -middley/gph[ii]->trce[0].yunits_perpxl;					//make a pixel val offset to center trace in the middle of its 'y' range values
-	shift_trc_y[ii][0] = shfty;									
-
-//printf("cb_fast_gph_keydown() - shift_trc_y %f  max_defl_y %f   yunits_perpxl %f  scale_trc_y %f\n", p->shift_trc_y[ii][0], p->max_defl_y[ii], o->trce[0].yunits_perpxl, p->scale_trc_y[ii][ 0 ] );
+//if(vb)printf("fast_mgraph::fit_plot() - ymin %f  %f\n", ymin, ymax );
 
 //o->adj_posy_by( sel_trc, 40.0, 1 );
 
 	plot_grph_internal( gph[ii]->graph_id );									//do it again: as found when 'multi_trace' is in use the 'ctl-m' adj was one mousewheel detent behind, doing this twice here hides this - to be FIXED
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//adj params so graph trace is plotted against spec y range
+void fast_mgraph::fit_plot_to_this_y_range( int grph_idx, double ymin, double ymax )
+{
+bool vb = 0;
+
+int ii = 0;
+
+if( grph_idx >= 0 )		//multiple graphs?
+	{
+	ii = grph_idx;
+	}
+
+
+	int samp_idx;
+	int sel_trc = gph[ii]->get_selected_trace_and_sample_indexes( samp_idx );
+
+	int iw, ih;
+	gph[ii]->get_trace_vis_dimensions( 0, iw, ih );
+	
+//	double xmin, xmax, ymin, ymax;
+//	gph[ii]->get_trace_min_max( 0, xmin, xmax, ymin, ymax );
+
+	gph[ii]->set_scaley( 0, 1.0f, 1 );									//first remove any 'a' key scaling
+	scale_trc_y[ii][0] = 1.0f;
+
+	gph[ii]->set_posy( 0, shift_trc_y[ii][0], 1 );
+
+	float dy = ymax - ymin;												//calc max 'y' range
+	float middley = dy/2 + ymin;										//find mid point
+
+
+	//----- work out range to use for y scale and y ticks --------
+	double extremey = fabs(ymax);
+	if( fabs( ymax ) < fabs(ymin) ) extremey = fabs(ymin);				//get which 'y' deflection is greater
+
+	double range_min =  y_tick_range[0];
+	double range_max =  y_tick_range[cn_fast_graph_y_tick_range_size - 1];
+	
+	double range_factor = 1;
+	int rnge_cnt = 0;
+	
+//	extremey = 1e309L;
+//extremey = 0.03;
+	y_tick_range_scale[ ii ] = 1.0;										//set something here incase below code fails to change it
+
+	double wnd = 0.020;													//allow a small percentage overshoot to avoid going into next range
+	if( ( extremey > std::numeric_limits<double>::min() ) && ( extremey < std::numeric_limits<double>::max() ) )			//check if not near an almost zero value, or too large a num
+		{
+		for( int j = 0; j < 1000; j++ )									//scale
+			{
+			if( extremey < range_min ) range_factor = 0.1;
+			if( extremey > range_max ) range_factor = 10;
+			
+			double range_min_wnd = range_min - range_min * wnd;			//allow a small percentage overshoot to avoid going into next range
+			double range_max_wnd = range_max + range_max * wnd;			//allow a small percentage overshoot to avoid going into next range
+			
+			if( ( extremey >= range_min_wnd ) && ( extremey <= range_max_wnd ) ) 
+				{
+				if(vb)printf("fast_mgraph::fit_plot_to_this_y_range() - found a good range: extremey %g   range_min %g   %g    rnge_cnt %d\n", extremey, range_min, range_max, rnge_cnt );
+				y_tick_range_scale[ ii ] = range_min;					//store this for scaling of 'y' tick values
+				break;
+				}
+
+			range_min *= range_factor;									//adj range
+			range_max *= range_factor;
+
+			rnge_cnt++;
+			if(vb)printf("fast_mgraph::fit_plot_to_this_y_range() - extremey %g  range_min %g %g   loop rnge_cnt %d\n", extremey, range_min, range_max, rnge_cnt );
+			}
+		}
+	else{
+		printf("fast_mgraph::fit_plot_to_this_y_range() - extremey: %g,  is either too small or too large a value for 'y' range code to handle\n", extremey );
+		}
+
+	extremey /= range_min;							//scale by range, e.g. '30' has 'range_min'= 10  'range_max'= 100,      '0.03' has  'range_min'= 0.01  'range_max'= 0.1    (30 becomes 3, which is within 'y_tick_range[]')
+
+	if(vb)printf("fast_mgraph::fit_plot_to_this_y_range() - scaled extremey: %g\n", extremey );
+
+	int which_range = 0;
+	for( int j = 0; j < cn_fast_graph_y_tick_range_size; j++ )			//find which 'y_tick_range[]' to use
+		{
+		if( y_tick_range[j] + y_tick_range[j] * wnd >= extremey )		//allow a small percentage overshoot to avoid going into next range
+			{
+			which_range = j;
+			if(vb)printf("fast_mgraph::fit_plot_to_this_y_range() - scaled extremey: %g is in range of 'y_tick_range[%d] whose max is: %f'\n", extremey, j, y_tick_range[j] );
+			tick_range_y_build( grph_idx, which_range, 0 );
+
+			//for debug only
+			if(vb)
+				{
+				for( int i = 0; i < cn_fast_graph_y_tick_range_values_size; i++ )
+					{
+			if(vb)printf("fast_mgraph::fit_plot_to_this_y_range() - generated y_tick_range_values[%d]:  %g    when scaled becomes:   %g\n", i, y_tick_range_values[ii][i], y_tick_range_values[ii][i]*y_tick_range_scale[ ii ] );
+					}
+				}
+
+			break;
+			}
+		}
+
+//	tick_range_y_build( which_range );
+	
+//getchar();
+
+	//------------------------------------------------------------
+	max_defl_y[ii] = 3.0;//dy/2.0f * 1.2f;								//set a max range just over actual max range
+
+	plot_grph_internal( gph[ii]->graph_id );							//need to replot graph twice (using cached vectors) as 'p->max_defl_y[ii]' has been changed
+	plot_grph_internal( gph[ii]->graph_id );							//need to replot graph twice (using cached vectors) as 'p->max_defl_y[ii]' has been changed
+
+	if( gph[ii]->trce.size() > 0 )										//v1.23
+		{
+		float shfty = 0;//-middley/gph[ii]->trce[0].yunits_perpxl;					//make a pixel val offset to center trace in the middle of its 'y' range values
+		shift_trc_y[ii][0] = 0;//shfty;									
+		}
+
+if(vb)printf("fast_mgraph::fit_plot() - ymin %f  %f\n", ymin, ymax );
+
+//o->adj_posy_by( sel_trc, 40.0, 1 );
+
+	plot_grph_internal( gph[ii]->graph_id );									//do it again: as found when 'multi_trace' is in use the 'ctl-m' adj was one mousewheel detent behind, doing this twice here hides this - to be FIXED
+}
+
+
+
+
+
+
 
 
 
@@ -12076,6 +14050,19 @@ int ii = o->graph_id;
 if( int0 == 'a' ) p->keya[ ii ] = 1;
 if( int0 == 'y' ) p->keyy[ ii ] = 1;
 if( int0 == 'm' ) p->keym[ ii ] = 1;
+if( int0 == 'p' ) 														//v1.24
+	{
+	p->keyp[ ii ] = 1;
+
+	if( p->plot_updating_state == 0 ) 
+		{
+		p->plot_updating_state = 1;
+		}
+	else{
+		p->plot_updating_state = 0;
+		}
+	}
+
 
 
 if( int0 == 's' ) 														//select a sample if none sel
@@ -12317,6 +14304,7 @@ if( int0 == 'a' ) p->keya[ ii ] = 0;
 if( int0 == 'f' ) p->keyf[ ii ] = 0;
 if( int0 == 'y' ) p->keyy[ ii ] = 0;
 if( int0 == 'm' ) p->keym[ ii ] = 0;
+if( int0 == 'p' ) p->keyp[ ii ] = 0;									//v1.24
 if( int0 == 's' ) p->keys[ ii ] = 0;
 
 if( ( int0 == FL_Shift_L ) | ( int0 == FL_Shift_R ) )  p->keyshift[ ii ] = 0;
@@ -12547,10 +14535,10 @@ fast_mgraph *p = (fast_mgraph*)o->parent();
 
 
 int left, right;
-if(  o->get_mousex_sample_boundary_idx( 0, left, right ) )
+if( o->get_mousex_sample_boundary_idx( 0, left, right ) )
 	{
 	p->left_hov_idx = left;												//get sample the mouse is nearest to, used when zooming (see mousewheel cb)
-//	printf("left: %d, %d\n", left, right);
+//	printf("cb_fast_gph_mousemove() - left: %d, %d\n", left, right);
 	}
 
 
@@ -12739,10 +14727,12 @@ scale_trc_y[gph_idx][ 3 ] = trc4;
 
 
 
+//THIS IS NO LONGER WORKING - USE 'fit_plot_to_this_y_range()'
 
 //this is the value that would be displayed at graph's 'y' extremes,
 //e.g. a sinewave of amplitude 1, would have a +/- 0.5 max deflection, so 'y_max_delf' should
 //be set to 0.5 to make full use of graph's display area for the y axis
+
 void fast_mgraph::set_ymax_deflection_value( int gph_idx, double y_max_delf )
 {
 if ( gph_idx >= gph_cnt ) return;
@@ -12815,6 +14805,8 @@ yunits_perpxl[ 3 ] = trc4;
 //SEE EXAMPLE CODE: 'test_fast_mgraph()'
 fast_mgraph::fast_mgraph( int gph_cnt_in, int xx, int yy, int wid, int hei, const char *label ) : Fl_Double_Window( xx, yy, wid, hei, label )
 {
+bool vb = 1;
+
 string s1;
 
 mnu = new Fl_Menu_Bar(0, 0, wid, 25);
@@ -12855,6 +14847,9 @@ plot_updating_state = 1;
 b_prev_plot_recording = 0;
 prev_plot_show_choice = 0;
 
+sample_rect_flicker = 0;												//v1.29
+
+b_show_sel_dB_y = 1;
 
 //init vars
 pos_x = 0;
@@ -12875,6 +14870,7 @@ for( int i = 0; i < cn_fast_mgraph_cnt_max; i++ )
 	keyf[i] = 0;
 	keyy[i] = 0;
 	keym[i] = 0;
+	keyp[i] = 0;
 	keys[i] = 0;
 	keyshift[i] = 0;
 	sel_idx1[i] = -1;
@@ -13029,10 +15025,16 @@ for( int i = 0; i < gph_cnt; i++ )
 
 	gph[i]->cursor_along_x0 = 0.5;        	 	//cursors along x-axis (i.e. measuring amplitude)
 	gph[i]->cursor_along_x1 = -0.3;
+
+
+	show_y_axis_guide_lines[i] = 1;
 	}
 
 
 use_logx = use_logy = 0;									//v1.13
+log_multiplier_x = 1.0;										//v1.33, as in 20*log10(x)
+log_multiplier_y = 20.0;									//v1.33, as in 20*log10(y)
+
 disp_vals_undo_logx = disp_vals_undo_logy = 0;				//v1.13, useful to keep a log trace's displayed values linear (e.g. for freq values)
 disp_vals_multiplier_x = disp_vals_multiplier_y = 1;		//v1.13, e.g: for logarithmic scale: 20*log10, set to 20
 
@@ -13045,6 +15047,29 @@ sample_rect_hints_distancex = 12;							//v1.13, helps stop congestion
 sample_rect_hints_distancey = 0;
 
 
+
+
+
+y_tick_range[0] = 1.0;													//see 'cn_fast_graph_y_tick_range_size'   and  search for: 'desirable tick values'		
+y_tick_range[1] = 1.25;
+y_tick_range[2] = 1.5;
+y_tick_range[3] = 2.0;
+y_tick_range[4] = 2.5;
+y_tick_range[5] = 3;
+y_tick_range[6] = 3.5;
+y_tick_range[7] = 4;
+y_tick_range[8] = 4.5;
+y_tick_range[9] = 5;
+y_tick_range[10] = 6;
+y_tick_range[11] = 8;
+y_tick_range[12] = 10;
+
+
+for( int i = 0; i < cn_fast_mgraph_cnt_max; i++ )
+	{
+	tick_range_y_build( i, 0, 0 );										//preload some 'y' tick range vals, these will be change when a new plot occurs		//search for: 'desirable tick values'
+	}
+
 Fl_Box *bx = new Fl_Box( 50, 50, wid - 50, hei - 50 );
 resizable( bx );
 bx->hide();
@@ -13052,6 +15077,50 @@ end();
 show();
 
 }
+
+
+
+
+
+//build a tick range set of values, these change when a new plot occurs		//search for: 'desirable tick values'
+//'which_range' is an index to 'y_tick_range[]', will load 'y_tick_range_values[][]' with tick vals
+bool fast_mgraph::tick_range_y_build( unsigned int trc, unsigned int which_range, bool verbose )
+{
+bool vb = verbose;
+
+if( trc >= cn_fast_mgraph_cnt_max ) 
+	{
+	printf("fast_mgraph::tick_range_y_build() - trc' %d is out of range, limit is %d\n", trc, cn_fast_mgraph_cnt_max - 1 );
+	return 0;
+	}
+
+if( which_range >= cn_fast_graph_y_tick_range_size )
+	{
+	printf("fast_mgraph::tick_range_y_build() - 'which_range' %d, is too big, limit is %d\n", which_range, cn_fast_graph_y_tick_range_size - 1 );
+	return 0;
+	}
+
+
+double tick_step = y_tick_range[which_range] / (cn_fast_graph_y_tick_range_values_size-1);
+double tick_val = 0.0f;
+
+for( int i = 0; i < cn_fast_graph_y_tick_range_values_size; i++ )
+	{
+	y_tick_range_values[trc][i] = tick_val;
+	
+	tick_val += tick_step;
+	
+if(vb) printf("y_tick_range[%d][%02d]: %f\n", trc, i, y_tick_range_values[trc][i]);
+	}
+
+//getchar();
+return 1;
+}
+
+
+
+
+
 
 
 
@@ -13186,6 +15255,26 @@ return Fl_Double_Window::handle(e);
 
 
 
+//-------- desirable tick values, see also: 'cn_fast_graph_y_tick_range_size' 'cn_fast_graph_y_tick_range_values_size'  'y_tick_range[]' 'y_tick_range_values[][]'  'tick_range_y_build()'--------------------------
+
+//10		//8			//6				//5				//4			//3.5		//3				//2.5			//2.0			//1.5			//1.2			//1.0
+
+//8.75		//7			//5.25			//4.375			//3.5					/2.875			//2.1875		//1.75											//0.825
+
+//7.5		//6			//4.5			//3.75			//3						//2.5			//1.875			//1.5			//1.25			//0.9			//0.75
+
+//6.25		//5			//3.75			//3.125			//2.5					//1.875			//1.5625		//1.25											//0.625
+	
+//5			//4			//3				//2.5			//2			//1.75		//1.5			//1.25			//1.0			//0.75			//0.6			//0.5
+
+//3.75		//3			//2.25			//1.875			//1.5					//1.125			//0.9375		//0.75											//0.375
+
+//2.5		//2			//1.5			//1.25			//1						//0.75			//0.625			//0.5			//0.375			//0.3			//0.25
+
+//1.25		//1			//0.75			//0.625			//0.5					//0.375			//0.3125		//0.25			//0.875							//0.125
+	
+//0			//0			//0				//0				//0			//0			//0				//0				//0				//0				//0				//0
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void fast_mgraph::update_fg_user_obj( int graph_idx )
 {
@@ -13267,8 +15356,10 @@ else extreme_y = fabs( miny );
 if( max_defl_y[ ii ] == 0.0 ) max_defl_y[ ii ] = extreme_y;				//this happens only on the initial (first) draw
 
 
+max_defl_y[ ii ] = y_tick_range_values[ii][ cn_fast_graph_y_tick_range_values_size - 1] * y_tick_range_scale[ii];		//for the range in use, scale it to be in range of plot vals
 
 
+//printf( "update_fg_user_obj()- max_defl_y[ ii ] %f      y_tick_range_values[] %f    y_tick_range_scale[] %f\n", max_defl_y[ ii ], y_tick_range_values[ii][ cn_fast_graph_y_tick_range_values_size - 1], y_tick_range_scale[ii] );
 
 //printf( "update_fg_user_obj() max_defl_y %f\n", max_defl_y[ii] );
 
@@ -13312,7 +15403,7 @@ float scle_trc_y = scale_trc_y[ ii ][0];
 
 
 
-
+/*																		//v1.29
 int offx, offy;
 gph[ ii ]->get_background_offsxy( offx, offy );
 
@@ -13337,7 +15428,8 @@ float vis_maxy = (hei) * yunits_pp / scle_trc_y;
 
 float vis_miny = -vis_maxy / 2.0f;
 
-valy = vis_miny + vis_maxy * (1.0f - ctrly) - shfty;
+//valy = vis_miny + vis_maxy * (1.0f - ctrly) - shfty;
+*/
 
 //printf( "update_fg_user_obj() minyy %f %f   vis_miny %f shfty %f\n", minyy, maxyy, vis_miny, shfty );
 
@@ -13371,7 +15463,7 @@ valy = vis_miny + vis_maxy * (1.0f - ctrly) - shfty;
 double dmx, dmy;
 gph[ ii ]->get_mouse_position_relative_to_trc( 0, dmx, dmy );
 
-//printf( "update_fg_user_obj()  dmy %f %f\n", dmx, dmy );
+//printf( "fast_mgraph::update_fg_user_obj()  dmx %f %f\n", dmx, dmy );
 
 //printf( "update_fg_user_obj()  minxx %f %f\n", minxx, maxxx );
 //printf( "update_fg_user_obj()  offx %d\n", offx );
@@ -13382,7 +15474,21 @@ gph[ ii ]->get_mouse_position_relative_to_trc( 0, dmx, dmy );
 
 //valx -= dposx;
 
-valx = dmx;
+
+
+
+if(1)
+	{
+	int imx, imy;
+	
+	gph[ ii ]->get_mouse( imx, imy );
+	gph[ ii ]->get_pixel_position_as_trc_values( 0, imx, imy, valx, valy );
+//	dmx = valx;
+	}
+
+
+
+//valx = dmx;
 
 //printf( "update_fg_user_obj()  offx %d mx %d  wid %d  ctrlx %f valx %f  dposx %f\n", offx, mx, gph[ ii ]->w(), ctrlx, valx, dposx );
 //----
@@ -13483,14 +15589,29 @@ if( trc != -1 )
 	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valy, sappend_num, sappend_units, 0 );
 	s2 = scombined;
 
+
+	if( b_show_sel_dB_y )													//show y val in dB
+		{
+		float logy = 0.0;			
+		if( fabs( valy ) > std::numeric_limits<double>::epsilon() )
+			{
+			logy = 20.0*log10( fabs(valy) );
+			}
+
+		strpf( s3, "%.2f dB", logy );
+		}
+	else{
+		s3 = "";
+		}
+
 	int sel_idx;
 	gph[ii]->get_selected_idx( trc, sel_idx );
 
 
 
+	if( b_show_sel_dB_y ) strpf( s1, "sel%d[%d]  x:%s  y:%s %s", trc, sel_idx, s1.c_str(), s2.c_str(), s3.c_str() );
+	else strpf( s1, "sel%d[%d]  x:%s  y:%s", trc, sel_idx, s1.c_str(), s2.c_str() );
 
-
-	strpf( s1, "sel%d[%d]  x:%s  y:%s", trc, sel_idx, s1.c_str(), s2.c_str() );
 	mdo.x1 = 220;
 	mdo.y1 = 9;
 	mdo.x2;
@@ -13558,6 +15679,25 @@ if( trc != -1 )
 
 	double dy = dy0 - dy1;
 
+	string s33;
+	if( b_show_sel_dB_y )													//show y val in dB
+		{
+		float log_dy0 = 0.0;			
+		if( fabs( dy0 ) > std::numeric_limits<double>::epsilon() )
+			{
+			log_dy0 = 20.0*log10( fabs(dy0) );
+			}
+
+		float log_dy1 = 0.0;			
+		if( fabs( dy1 ) > std::numeric_limits<double>::epsilon() )
+			{
+			log_dy1 = 20.0*log10( fabs(dy1) );
+			}
+
+		strpf( s33, "%.2f dB", log_dy0 - log_dy1 );
+		}
+	
+
 	
 	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, dx, sappend_num, sappend_units, 0 );
 	s2 = scombined;
@@ -13571,7 +15711,10 @@ if( trc != -1 )
 	s4 = scombined;
 
 	int delta_cnt = last_sel0_idx[ii] - last_sel1_idx[ii];				//v1.22
-	strpf( s1, "dcnt:%d  dx:%s  dy:%s (Freq:%s Hz)", delta_cnt, s2.c_str(), s3.c_str(), s4.c_str() );
+	
+	
+	if( b_show_sel_dB_y ) strpf( s1, "dcnt:%d  dx:%s  dy:%s %s, (Freq:%s Hz)", delta_cnt, s2.c_str(), s3.c_str(), s33.c_str(), s4.c_str() );
+	else  strpf( s1, "dcnt:%d  dx:%s  dy:%s, (Freq:%s Hz)", delta_cnt, s2.c_str(), s3.c_str(), s4.c_str() );
 //	strpf( s1, "dx:%.2f dy:%.2f (Freq:%.2f Hz)", dx, dy, 1.0/dx );
 	mdo.x1 = 460;
 	mdo.y1 = 9;
@@ -13675,20 +15818,20 @@ if( max_defl_y[ ii ] == 0.0 ) max_defl_y[ ii ] = extreme_y;				//this happens on
 if(vb)printf( "update_fg_user_obj()0  extreme_y %f   max_defl_y %f  maxy %f   miny %f\n", extreme_y, max_defl_y[ ii ], maxy, miny );
 
 int hh = gph[ii]->h();
-float fmaxy = 0.0f;
-float fminy = -0.0f;
+double dmaxy = 0.0f;
+double dminy = -0.0f;
 
 
 if( max_defl_y[ ii ] != 0.0 )											//has a 'max_defl_y[]'
 	{
 	yunits_perpxl[ii] = max_defl_y[ ii ] / (hh/2 - 20);					//calc suitable 'yunits_perpxl[]'
 		
-	fmaxy = fabs( max_defl_y[ ii ] );
+	dmaxy = fabs( max_defl_y[ ii ] );
 	}
 //else{
 //	fmaxy = maxy * 0.95;
 //	}
-if(vb)printf( "update_fg_user_obj()1  max_defl_y %f  fmaxy %f  yunits_perpxl[%d] %f\n", max_defl_y[ ii ], fmaxy, ii, yunits_perpxl[ii] );
+if(vb)printf( "update_fg_user_obj()1  max_defl_y %f  fmaxy %f  yunits_perpxl[%d] %f\n", max_defl_y[ ii ], dmaxy, ii, yunits_perpxl[ii] );
 
 
 
@@ -13698,7 +15841,7 @@ float factor = 1.0f;
 //printf( "update_fg_user_obj()2  max_defl_y %f  fmaxy %f\n", max_defl_y[ ii ], fmaxy );
 
 
-float max_tmp = max_defl_y[ ii ];
+double max_tmp = max_defl_y[ ii ];
 
 if( max_defl_y[ ii ] != 0.0 )						//have a max delfection value ? (note this is always true as its set above)
 	{
@@ -13708,28 +15851,37 @@ if( max_defl_y[ ii ] != 0.0 )						//have a max delfection value ? (note this is
 //	max_tmp = maxy;
 //	}
 
+
+if( std::isinf( max_tmp ) ) 											//v1.28, this stops 'while' loop below from looping forever if 'max_tmp' is at infinity 
+	{
+	max_tmp = std::numeric_limits<float>::max();
+	printf( "update_fg_user_obj() - 'max_tmp' was at infinity, setting it to  'std::numeric_limits<float>::max()'  (%f)\n", max_tmp );
+	}
+
+
 //scale 'max_tmp' to between 0.1 --> 1.0, by adj a suitable factor
 while( max_tmp != 0.0 )
 	{
+	
 	if( max_tmp < 0.1 ) 
 		{
-		max_tmp *= 10.0f;
+		max_tmp *= 10.0;
 		factor *= 10;
 		continue;
 		}
 
 	if( max_tmp > 1.0 ) 
 		{
-		max_tmp /= 10.0f;
+		max_tmp /= 10.0;
 		factor /= 10;
 		continue;
 		}
 	break;
 	}
 
-if(vb)printf( "update_fg_user_obj()3  max_defl_y %f  max_tmp %f  maxy %f  factor %f\n", max_defl_y[ ii ], max_tmp, fmaxy, factor );
+if(vb)printf( "update_fg_user_obj()3  max_defl_y %f  max_tmp %f  maxy %f  factor %f\n", max_defl_y[ ii ], max_tmp, dmaxy, factor );
 
-float max_tmp2 = max_tmp*100;
+double max_tmp2 = max_tmp*100;
 
 int iv = nearbyint( max_tmp2 );			//remove less significant digits
 
@@ -13738,12 +15890,12 @@ max_tmp = iv/100.0f;
 max_tmp /= factor;
 
 
-fmaxy = max_tmp;	
-fminy = -fmaxy;
+dmaxy = max_tmp;	
+dminy = -dmaxy;
 
 
-maxy = fmaxy;
-miny = fminy;
+maxy = dmaxy;
+miny = dminy;
 
 //----------------------------------------------------------------------
 
@@ -13785,19 +15937,117 @@ double posx;
 gph[ii]->get_posx_relative_to_trace(0, posx );
 
 int tick = xtick_marks[ii];
-float dt = (maxx/scalex - minx/scalex ) / (float)tick;
+double dt = (maxx/scalex - minx/scalex ) / (double)tick;
 
 
 
 int cnt = vtrc_valy1[ii].size();
 float minx2 = x_axis_values_derived_left_value[ii];						//these are used when 'b_x_axis_values_derived[]' is set, and no 'x' vector has been supplied
 float maxx2 = minx2 + cnt * x_axis_values_derived_inc_value[ii];
-float dt2_tick = (maxx2/scalex - minx2/scalex ) / (float)tick;
+float dt2_tick = (maxx2/scalex - minx2/scalex ) / (double)tick;
 float dt3 = (maxx2/scalex - minx2/scalex ) / cnt;
 
 int left_idx;
 gph[ii]->get_left_edge_sample_idx( 0, left_idx );
-float left_valuex = left_idx * (dt3*scalex);
+double left_valuex = left_idx * (dt3*scalex);
+
+
+
+/*
+bool b_show_x_axis_zero_tick = 1;										//v1.26
+
+float last_x1 = -1e-9;													//some large neg num	
+if( b_show_x_axis_zero_tick )											//v1.26
+	{
+	for( int i = 0; i < tick; i++ )
+		{
+		//x-axis ticks
+		mdo.use_pos_x = 0;
+		mdo.use_scale_x = 0;               	//if not set to -1: then use this trace id to get a specific y scale
+
+		mdo.type  = en_dobt_line;
+		mdo.draw_ordering = 2;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+
+		mdo.clip_left = x_axis_offs - 35;
+		mdo.clip_right = 0;
+		mdo.clip_top = 0;
+		mdo.clip_bottom = 0;
+
+		
+		float fscly_tickx = scale_trc_y[ii][ 0 ];							//v1.22
+
+		mdo.x1 = minx + i * dt - posx;										//v1.16
+
+
+		mdo.y1 = miny + (maxy - miny)/2 + (maxy - miny) * 0.003/fscly_tickx;	//v1.22
+
+		mdo.x2 = mdo.x1;
+		mdo.y2 = miny + (maxy - miny)/2 - (maxy - miny) * 0.004/fscly_tickx;
+
+	//printf( "mdo.y2: %f %f\n", mdo.y1, mdo.y2);
+		mdo.r = 0;//col_obj_axis[ii].r;
+		mdo.g =  0;col_obj_axis[ii].g;
+		mdo.b =  0;col_obj_axis[ii].b;
+
+		gph[ii]->vdrwobj.push_back( mdo );
+
+		//x-axis text vals
+		string snum, sunits, scombined, sappend_num, sappend_units;
+		sappend_units = "";
+		sappend_num = "";
+		
+		double valx = mdo.x1;
+		
+		if( b_x_axis_values_derived[ii] )									//does user want to display specific x axis values ? (only works for plots without a supplied x vector)
+			{
+			if( !b_x_axis_vector_supplied[ii] )
+				{
+				valx = x_axis_values_derived_left_value[ii] + left_valuex + ( dt2_tick * i ) ;
+				}
+			}
+
+
+if(1)printf( "**************************update_fg_user_obj() i %d  last_x1 %f %f\n", i, last_x1,  valx );
+		if( ( last_x1 < -1e-9f ) && ( valx >= 0.0f ) )
+			{
+		
+			if( ( use_logx ) && ( disp_vals_undo_logx ) ) valx = pow(10, valx);
+			valx *= disp_vals_multiplier_x;
+			
+			m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valx, sappend_num, sappend_units, 1 );
+			mdo.type = en_dobt_text;
+
+			mdo.draw_ordering = 2;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+			strpf( s1, "%s", scombined.c_str() );
+			mdo.arc1 = 0;
+			mdo.arc2 = 0;
+			mdo.stext = s1;
+
+
+
+			mdo.x1 -= 3;
+			mdo.y1 = miny + (maxy - miny)/2 - (maxy - miny) * 0.025/fscly_tickx;	//v1.22;
+			mdo.r = 0;//col_obj_text[ii].r;
+			mdo.g = 0;//col_obj_text[ii].g;
+			mdo.b = 0;//col_obj_text[ii].b;
+
+			mdo.font = fnt_type;
+			mdo.font_size = fnt_size;
+			mdo.justify = en_tj_horiz_center;
+			mdo.line_style = (en_mgraph_line_style)FL_SOLID;
+			mdo.line_thick = 1;
+
+			gph[ii]->vdrwobj.push_back( mdo );
+			break;
+			}
+	
+		last_x1 = valx;
+		}
+	}
+
+*/
+
+
 
 
 
@@ -13917,19 +16167,19 @@ bool fixed_axis_y = 1;													//v1.19
 
 float shfty = shift_trc_y[ ii ][0]*gph[ii]->trce[0].yunits_perpxl;
 
-if( fixed_axis_y ) dt = (fmaxy/1 - fminy/1 ) / (float)tick;
+if( fixed_axis_y ) dt = (dmaxy/1 - dminy/1 ) / (float)tick;
 else dt = (maxy/scaley - miny/scaley ) / (float)tick;					//NOTE: this never executes
 
 
 
 //printf( "update_fg_user_obj()  fminy %f %f   dt n", fminy, fmaxy );
 
-if(vb)printf( "update_fg_user_obj()4  max_defl_y %f  max_tmp %f  fmaxy %f   dt %f  factor %f\n", max_defl_y[ ii ], max_tmp, fmaxy, dt, factor );
+if(vb)printf( "update_fg_user_obj()4  max_defl_y %f  max_tmp %f  fmaxy %f   dt %f  factor %f\n", max_defl_y[ ii ], max_tmp, dmaxy, dt, factor );
 
-fmaxy = dt*(tick/2);
-fminy = -dt*(tick/2);
+dmaxy = dt*(tick/2);
+dminy = -dt*(tick/2);
 
-if(vb)printf( "update_fg_user_obj()5  max_defl_y %f  fmaxy %f   dt %f  factor %f\n", max_defl_y[ ii ], fmaxy, dt, factor );
+if(vb)printf( "update_fg_user_obj()5  max_defl_y %f  fmaxy %f   dt %f  factor %f\n", max_defl_y[ ii ], dmaxy, dt, factor );
 
 
 //double ddx, ddy;
@@ -13939,6 +16189,210 @@ if(vb)printf( "update_fg_user_obj()5  max_defl_y %f  fmaxy %f   dt %f  factor %f
 //printf( "update_fg_user_obj() -  ddx %f %f\n", ddx, ddy );
 
 
+//tick = 8;
+double dy = 0;
+
+
+
+//--- y-axis ticks ---
+for( int i = 0; i < cn_fast_graph_y_tick_range_values_size; i++ )
+	{
+	//--- tick line ---
+	mdo.type  = en_dobt_line;
+	mdo.draw_ordering = 2;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+
+	mdo.clip_left = 0;
+	mdo.clip_right = 0;
+	mdo.clip_top = 0;
+	mdo.clip_bottom = 0;
+
+	mdo.x1 = x_axis_offs + 2;
+	
+//	if( fixed_axis_y ) mdo.y1 = fminy + i * dt + 0;
+//	else mdo.y1 = miny/scaley + i * dt;									//NOTE: this never executes
+
+	dy = y_tick_range_values[ii][i] * y_tick_range_scale[ii];			//scale pre calculated tick range vals to be inline with plot vals extremes
+	
+	mdo.y1 = 0 + dy;
+	
+//	if( mdo.y1 > 11.0f ) break;
+	
+	mdo.x2 = x_axis_offs - 1;
+	mdo.y2 = mdo.y1;
+
+	mdo.r = col_obj_axis[ii].r;
+	mdo.g = col_obj_axis[ii].g;
+	mdo.b = col_obj_axis[ii].b;
+
+	gph[ii]->vdrwobj.push_back( mdo );
+
+//double posy;
+//gph[ii]->get_posy_relative_to_trace(0, posy );						
+//posy = shfty;
+	//y-axis text vals
+	string snum, sunits, scombined, sappend_num, sappend_units;
+	sappend_units = "";
+	sappend_num = "";
+
+//	int vis_wid, vis_hei;	
+//	gph[ii]->get_trace_vis_dimensions( 0, vis_wid, vis_hei );
+
+//	float shfty = (maxy - miny)  * ((float)shift_trc_y[ ii ][0] / vis_hei);									//v1.22
+//	float shfty = (maxy - miny)/2  * ((float)shift_trc_y[ ii ][0] / ((float)vis_hei/2 ));									//v1.22
+
+
+
+//printf("fast_mgraph::update_fg_user_obj() - shift_trc_y %f shfty %f\n", shift_trc_y[ ii ][0], shfty );
+
+
+
+
+
+	//--- y-axis long horiz guide lines ---
+	if( show_y_axis_guide_lines[ii] )
+		{
+		mdo.type  = en_dobt_line;
+		mdo.draw_ordering = 1;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+
+		mdo.clip_left = 0;
+		mdo.clip_right = 0;
+		mdo.clip_top = 0;
+		mdo.clip_bottom = 0;
+
+		mdo.x1 = x_axis_offs + 5;
+		
+	//	if( fixed_axis_y ) mdo.y1 = fminy + i * dt + 0;
+	//	else mdo.y1 = miny/scaley + i * dt;									//NOTE: this never executes
+
+		dy = y_tick_range_values[ii][i] * y_tick_range_scale[ii];			//scale pre calculated tick range vals to be inline with plot vals extremes
+		
+		mdo.y1 = 0 + dy;
+		
+	//	if( mdo.y1 > 11.0f ) break;
+
+		mdo.x2 = mdo.x1 + bkg_wid - 10;
+		mdo.y2 = mdo.y1;
+
+		mdo.r = 230;
+		mdo.g = 230;
+		mdo.b = 230;
+
+		gph[ii]->vdrwobj.push_back( mdo );
+
+
+
+
+		mdo.y1 = 0 - dy;												//v1.30
+		
+	//	if( mdo.y1 > 11.0f ) break;
+
+		mdo.x2 = mdo.x1 + bkg_wid - 10;
+		mdo.y2 = mdo.y1;
+
+		mdo.r = 230;
+		mdo.g = 230;
+		mdo.b = 230;
+
+		gph[ii]->vdrwobj.push_back( mdo );
+		}
+
+
+
+
+
+
+
+
+	//--- y axis numbers ---
+	mdo.y1 = 0 + dy;
+	
+	double valy = mdo.y1;												//v1.13
+//	double valy = mdo.y1;										//v1.13
+	if( ( use_logy ) && ( disp_vals_undo_logy ) ) valy = pow(10, valy);
+	valy *= 1.0f;//disp_vals_multiplier_y;
+
+//	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valy - shfty/scle_trc_y, sappend_num, sappend_units, 1 );
+	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valy, sappend_num, sappend_units, 1 );
+
+	mdo.type = en_dobt_text;
+	mdo.draw_ordering = 1;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+
+	mdo.type = en_dobt_text;
+	strpf( s1, "%s", scombined.c_str() );
+	mdo.arc1 = 0;
+	mdo.arc2 = 0;
+	mdo.stext = s1;
+
+	mdo.clip_left = 0;
+	mdo.clip_right = 0;
+	mdo.clip_top = 0;
+	mdo.clip_bottom = 0;
+
+	mdo.x1 = 8;
+//	if( fixed_axis_y ) mdo.y1 = fminy/1 + i * dt;//- (maxy - miny ) * 0.02;
+//	else  mdo.y1 = miny/scaley + i * dt;								//NOTE: this never executes
+	
+	mdo.r = col_obj_text[ii].r;
+	mdo.g = col_obj_text[ii].g;
+	mdo.b = col_obj_text[ii].b;
+	mdo.font = fnt_type;
+	mdo.font_size = fnt_size;
+	mdo.justify = en_tj_vert_center;
+	mdo.line_style = (en_mgraph_line_style)FL_SOLID;
+	mdo.line_thick = 1;
+
+	gph[ii]->vdrwobj.push_back( mdo );
+	
+
+
+
+	//neg nums															v1.30
+	mdo.y1 = 0 - dy;
+	
+	valy = mdo.y1;												//v1.13
+
+	if( ( use_logy ) && ( disp_vals_undo_logy ) ) valy = pow(10, valy);
+	valy *= 1.0f;//disp_vals_multiplier_y;
+
+//	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valy - shfty/scle_trc_y, sappend_num, sappend_units, 1 );
+	m1.make_engineering_str_exp( snum, sunits, scombined, sig_dig, valy, sappend_num, sappend_units, 1 );
+
+	mdo.type = en_dobt_text;
+	mdo.draw_ordering = 1;				//draw before graticle, 0 = before grid,  1 = after graticle but before traces,   2 = after traces
+
+	mdo.type = en_dobt_text;
+	strpf( s1, "%s", scombined.c_str() );
+	mdo.arc1 = 0;
+	mdo.arc2 = 0;
+	mdo.stext = s1;
+
+	mdo.clip_left = 0;
+	mdo.clip_right = 0;
+	mdo.clip_top = 0;
+	mdo.clip_bottom = 0;
+
+	mdo.x1 = 8;
+//	if( fixed_axis_y ) mdo.y1 = fminy/1 + i * dt;//- (maxy - miny ) * 0.02;
+//	else  mdo.y1 = miny/scaley + i * dt;								//NOTE: this never executes
+	
+	mdo.r = col_obj_text[ii].r;
+	mdo.g = col_obj_text[ii].g;
+	mdo.b = col_obj_text[ii].b;
+	mdo.font = fnt_type;
+	mdo.font_size = fnt_size;
+	mdo.justify = en_tj_vert_center;
+	mdo.line_style = (en_mgraph_line_style)FL_SOLID;
+	mdo.line_thick = 1;
+
+	gph[ii]->vdrwobj.push_back( mdo );
+
+	}
+
+
+
+
+
+/*
 for( int i = 0; i <= tick; i++ )
 	{
 	//y-axis ticks
@@ -14020,7 +16474,7 @@ for( int i = 0; i <= tick; i++ )
 
 	gph[ii]->vdrwobj.push_back( mdo );
 	}
-
+*/
 
 
 
@@ -14078,6 +16532,10 @@ if( vextra_drwobj[ii].size() != 0 )
 
 gph[ ii ]->redraw();
 }
+
+
+
+
 
 
 
@@ -15087,6 +17545,7 @@ if ( grph_idx >= gph_cnt ) return;
 if ( grph_idx < 0 ) return;
 
 trc_label_multi_1[grph_idx] = ss;
+trc_label_multi_1[grph_idx] = ss;										//v1.32
 }
 
 
@@ -15313,6 +17772,12 @@ plot_grph_internal( gph_idx );
 
 
 
+
+
+
+
+
+
 //one graph, single trace (vector x not suppied)
 void fast_mgraph::plot_vfloat_1( vector<float> &vy1 )
 {
@@ -15370,6 +17835,101 @@ for( int i = 0; i < vy1.size(); i++ )
 
 plot_grph_internal( -1 );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//call also  'user_marker_idx_add()' and 'user_marker_show()'
+//rem call 'user_marker_show()' to flag a show and cause a 'plot_grph_internal()' call
+void fast_mgraph::user_marker_add( unsigned int trce_idx, vector<st_mgraph_user_marker_tag> &vv )	//v1.25
+{
+if( plot_updating_state == 0 ) return;
+
+if( trce_idx < 0 ) return;
+if( trce_idx >= gph[0]->trce.size() ) return;
+
+//vuser_marker_cache[0] = vv;								//cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+vuser_marker_cache[trce_idx] = vv;								//v1.32 cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+
+
+
+
+//gph[0]->trce[ trce_idx ].vuser_marker = vv;
+
+//plot_grph_internal( -1 );												//this is done when 'user_marker_show()' to avoid unnecessary drawing
+}
+
+
+
+
+
+
+//call also   'user_marker_add()' and 'user_marker_show()'
+//rem call 'user_marker_show()' to flag a show and cause a 'plot_grph_internal()' call
+void fast_mgraph::user_marker_idx_add( unsigned int trce_idx, vector<int> &vidx )					//v1.25
+{
+if( plot_updating_state == 0 ) return;
+
+if( trce_idx < 0 ) return;
+if( trce_idx >= gph[0]->trce.size() ) return;
+
+//vuser_marker_idx_cache[0] = vidx;							//cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+vuser_marker_idx_cache[trce_idx] = vidx;							//v1.32 cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+gph[0]->trce[ trce_idx ].vuser_marker_idx = vidx;
+
+//plot_grph_internal( -1 );												//this is done when 'user_marker_show()' to avoid unnecessary drawing
+}
+
+
+
+
+
+
+
+
+
+
+
+//see 'user_marker_add()' 'user_marker_idx_add()' 
+//e.g: call this AFTER 'user_marker_add()'    'user_marker_idx_add()'  are called
+void fast_mgraph::user_marker_show( unsigned int trce_idx, bool user_marker_show )					//v1.25
+{
+if( plot_updating_state == 0 ) return;
+
+
+
+if( trce_idx < 0 ) return;
+if( trce_idx >= gph[0]->trce.size() ) return;
+
+
+//user_marker_show_cache[ 0 ] = user_marker_show;							//cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+user_marker_show_cache[ trce_idx ] = user_marker_show;					//v1.32 cache to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
+
+
+plot_grph_internal( -1 );
+
+//gph[0]->trce[ trce_idx ].user_marker_show = user_marker_show;
+}
+
+
+
+
+
 
 
 
@@ -15755,6 +18315,10 @@ vtrc_valy2[ 0 ] = vy2;
 if( vtrc_valy1[0].size() < vtrc_valx[0].size() ) back_fill( vtrc_valx[0].size(), vtrc_valy1[0] );	//cache vectors to allow internal redrawing from callbacks, e.g when mousewheel amplitude adjs are performed
 if( vtrc_valy2[0].size() < vtrc_valx[0].size() ) back_fill( vtrc_valx[0].size(), vtrc_valy2[0] );
 
+//vuser_marker_cache
+//if( vtrc_valy1[0].size() < vtrc_valx[0].size() ) 
+
+
 plot_grph_internal( -1 );
 }
 
@@ -15953,7 +18517,7 @@ double dd;
 //	vtrc_valy4[ 0 ] = vy4;
 	}
 
-x_axis_offs = 65;
+x_axis_offs = 0;	//65
 
 gph[ii]->get_scalex( 0, scale_x );						//get current state, before refreshing traces
 gph[ii]->get_posx( 0, pos_x );
@@ -16126,6 +18690,7 @@ tr1.sample_rect_hints_distancex = sample_rect_hints_distancex;		//v1.13
 tr1.sample_rect_hints_distancey = sample_rect_hints_distancey;		//v1.13
 
 tr1.sample_rect_flicker = 0;										//v1.22
+tr1.sample_rect_flicker = sample_rect_flicker;						//v1.29
 
 
 pnt_tag pnt1;
@@ -16146,18 +18711,26 @@ for( int i = 0; i < vtrc_valx[ii].size(); i++ )
 
 	pnt1.x = vtrc_valx[ii][ i ];
 	pnt1.y = vtrc_valy1[ii][ i ];
+	
+//	if(i == 100) pnt1.y = 200;
+//	if(i == 101) pnt1.y = -200;
+	
+//	pnt1.user_marker_idx = gph[ii]->user_marker_curr_idx;			//v1.25
 
 
 
 	if( use_logx )
 		{
-		pnt1.x = log10( pnt1.x );									//v1.13	
+		if( pnt1.x <= std::numeric_limits<double>::epsilon() ) pnt1.x = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+		pnt1.x = log_multiplier_x*log10f( pnt1.x );									//v1.33	
 		}
 
 
 	if( use_logy )
 		{
-		pnt1.y = log10( pnt1.y );									//v1.13	
+		if( pnt1.y <= std::numeric_limits<double>::epsilon() ) pnt1.y = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+		
+		pnt1.y = log_multiplier_y*log10f( pnt1.y );									//v1.33
 		}
 
 
@@ -16212,7 +18785,9 @@ if( multi_trace >= 2 )
 		pnt1.x = vtrc_valx[ii][ i ];
 //		pnt1.y = vy2[ i ];
 		pnt1.y = vtrc_valy2[ii][ i ];
+//		pnt1.user_marker_idx = gph[ii]->user_marker_curr_idx;			//v1.25
 
+/*
 		if( use_logx )
 			{
 			pnt1.x = log10( pnt1.x );									//v1.13	
@@ -16222,10 +18797,27 @@ if( multi_trace >= 2 )
 			{
 			pnt1.y = log10( pnt1.y );									//v1.13	
 			}
+*/
+		if( use_logx )
+			{
+			if( pnt1.x <= std::numeric_limits<double>::epsilon() ) pnt1.x = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			pnt1.x = log_multiplier_x*log10( pnt1.x );									//v1.33	
+			}
+
+
+		if( use_logy )
+			{
+			if( pnt1.y <= std::numeric_limits<double>::epsilon() ) pnt1.y = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			
+			pnt1.y = log_multiplier_y*log10( pnt1.y );									//v1.33
+			}
+
 
 
 		pnt1.y = pnt1.y * scale_trc_y[ii][ 1 ];// + shift_trc_y[ 1 ];
 		pnt1.sel = 0;
+//		pnt1.user_marker_idx = gph[ii]->user_marker_curr_idx;			//v1.25
+		
 	//if( ( i >= 5000 ) & ( i <= 20000) ) pnt1.sel = 1;
 
 		tr1.pnt.push_back( pnt1 );
@@ -16275,7 +18867,9 @@ if( multi_trace >= 3 )
 		pnt1.x = vtrc_valx[ii][ i ];
 //		pnt1.y = vy3[ i ];
 		pnt1.y = vtrc_valy3[ii][ i ];
+//		pnt1.user_marker_idx = gph[ii]->user_marker_curr_idx;			//v1.25
 
+/*
 		if( use_logx )
 			{
 			pnt1.x = log10( pnt1.x );									//v1.13	
@@ -16284,6 +18878,20 @@ if( multi_trace >= 3 )
 		if( use_logy )
 			{
 			pnt1.y = log10( pnt1.y );									//v1.13	
+			}
+*/
+
+		if( use_logx )
+			{
+			if( pnt1.x <= std::numeric_limits<double>::epsilon() ) pnt1.x = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			pnt1.x = log_multiplier_x*log10( pnt1.x );									//v1.33	
+			}
+
+		if( use_logy )
+			{
+			if( pnt1.y <= std::numeric_limits<double>::epsilon() ) pnt1.y = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			
+			pnt1.y = log_multiplier_y*log10( pnt1.y );									//v1.33
 			}
 
 		pnt1.y = pnt1.y * scale_trc_y[ii][ 2 ];// + shift_trc_y[ 2 ];
@@ -16336,7 +18944,9 @@ if( multi_trace >= 4 )
 		pnt1.x = vtrc_valx[ii][ i ];
 //		pnt1.y = vy4[ i ];
 		pnt1.y = vtrc_valy4[ii][ i ];
+//		pnt1.user_marker_idx = gph[ii]->user_marker_curr_idx;			//v1.25
 
+/*
 		if( use_logx )
 			{
 			pnt1.x = log10( pnt1.x );									//v1.13	
@@ -16345,6 +18955,21 @@ if( multi_trace >= 4 )
 		if( use_logy )
 			{
 			pnt1.y = log10( pnt1.y );									//v1.13	
+			}
+*/
+
+		if( use_logx )
+			{
+			if( pnt1.x <= std::numeric_limits<double>::epsilon() ) pnt1.x = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			pnt1.x = log_multiplier_x*log10( pnt1.x );									//v1.33	
+			}
+
+
+		if( use_logy )
+			{
+			if( pnt1.y <= std::numeric_limits<double>::epsilon() ) pnt1.y = std::numeric_limits<double>::epsilon();//std::numeric_limits<double>::min();
+			
+			pnt1.y = log_multiplier_y*log10( pnt1.y );									//v1.33
 			}
 
 		pnt1.y = pnt1.y * scale_trc_y[ii][ 3 ];// + shift_trc_y[ 2 ];
@@ -16416,6 +19041,27 @@ gph[ii]->set_selected_sample( last_sel_trc, idx, 0 );					//trigger: left_click_
 if( grph_idx >= 0 ) update_fg_user_obj( grph_idx );						//multiple graphs, one trace on each?
 else update_fg_user_obj( 0 );											//single graph, multiple tracers
 
+
+
+//trce_idx
+
+if( gph[ii]->trce.size() > 0 ) gph[ii]->trce[ 0 ].vuser_marker = vuser_marker_cache[0];
+if( gph[ii]->trce.size() > 0 ) gph[ii]->trce[ 0 ].vuser_marker_idx = vuser_marker_idx_cache[0];
+if( gph[ii]->trce.size() > 0 ) gph[ii]->trce[ 0 ].user_marker_show = user_marker_show_cache[0];
+
+if( gph[ii]->trce.size() > 1 ) gph[ii]->trce[ 1 ].vuser_marker = vuser_marker_cache[1];				//v1.32
+if( gph[ii]->trce.size() > 1 ) gph[ii]->trce[ 1 ].vuser_marker_idx = vuser_marker_idx_cache[1];
+if( gph[ii]->trce.size() > 1 ) gph[ii]->trce[ 1 ].user_marker_show = user_marker_show_cache[1];
+
+if( gph[ii]->trce.size() > 2 ) gph[ii]->trce[ 2 ].vuser_marker = vuser_marker_cache[2];				//v1.32
+if( gph[ii]->trce.size() > 2 ) gph[ii]->trce[ 2 ].vuser_marker_idx = vuser_marker_idx_cache[2];
+if( gph[ii]->trce.size() > 2 ) gph[ii]->trce[ 2 ].user_marker_show = user_marker_show_cache[2];
+
+if( gph[ii]->trce.size() > 3 ) gph[ii]->trce[ 3 ].vuser_marker = vuser_marker_cache[3];				//v1.32
+if( gph[ii]->trce.size() > 3 ) gph[ii]->trce[ 3 ].vuser_marker_idx = vuser_marker_idx_cache[3];
+if( gph[ii]->trce.size() > 3 ) gph[ii]->trce[ 3 ].user_marker_show = user_marker_show_cache[3];
+
+
 //gph[ii]->center_on_sample( 0, 1000 );
 
 //gph[ii]->render( 0 );
@@ -16481,6 +19127,413 @@ if( trc == -1 )
 	set_selected_sample( last_sel_trc, 0, 0 );
 	}
 }
+
+
+
+
+
+
+/*
+===============================================================================
+function:
+	bool fft_fwd_real_cplx( vector<float> &vin,
+							vector< complex<float> > &vout,
+							vector<float> &vout_mag,
+							bool b_normalise = 1,
+							bool b_add_neg_spectrum = 1,
+							bool b_human_format = 1 )
+
+purpose:
+	performs a forward discrete fourier transform (dft) of a real signal.
+
+	input vector vin may be any size (not required to be power-of-two).
+
+	the output vector vout contains the full complex spectrum including
+	positive and negative frequencies.
+
+	vector vout_mag contains the magnitude spectrum calculated using
+	pythagoras:
+
+		mag = sqrt( re^2 + im^2 )
+
+	magnitude is calculated AFTER normalization and AFTER any spectrum
+	reordering so indices match vout exactly.
+
+-------------------------------------------------------------------------------
+
+default spectrum layout (b_human_format = 0)
+
+vout.size() = N
+
+index		frequency
+-----------------------------------------
+0			DC
+1 .. N/2-1	positive frequencies
+N/2		Nyquist (only if N even)
+N/2+1 .. N-1	negative frequencies
+
+frequency mapping:
+
+	f = k * Fs / N
+
+for bins above Nyquist:
+
+	actual_frequency = (k - N) * Fs / N
+
+example N = 8
+
+index	freq
+----------------
+0	0
+1	+1
+2	+2
+3	+3
+4	Nyquist
+5	-3
+6	-2
+7	-1
+
+-------------------------------------------------------------------------------
+
+human plotting format (b_human_format = 1)
+
+spectrum reordered for plotting (fftshift style)
+
+index		frequency
+-----------------------------------------
+0 .. N/2-1	most negative frequencies
+N/2		DC
+N/2+1 .. N-1	positive frequencies
+
+example N = 8
+
+index	freq
+----------------
+0	-4
+1	-3
+2	-2
+3	-1
+4	DC
+5	+1
+6	+2
+7	+3
+
+Nyquist:
+
+even N:
+	default format → index N/2
+	human format → index 0
+
+-------------------------------------------------------------------------------
+
+normalisation
+
+if enabled:
+
+	X[k] = X[k] / N
+
+result:
+
+	DC bin = mean of vin
+
+example sine amplitude behaviour:
+
+	1.0 amplitude sine →
+
+	|X(+f)| = 0.5
+	|X(-f)| = 0.5
+
+-------------------------------------------------------------------------------
+*/
+//does not use fftw, above comment explains where spectra live, note: 'b_human_format = 1' 'b_add_neg_spectrum = 1'
+
+bool fast_mgraph::plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, vector<float> &vin )
+{
+
+fast_mgraph *gph = this;
+
+vector< complex<float> > vout;
+vector<float> vout_mag;
+bool b_add_neg_spectrum = 1;
+bool b_human_format = 1;
+
+	size_t n = vin.size();
+
+	if( n == 0 )
+	{
+		return 0;
+	}
+
+	vout.resize( n );
+	vout_mag.resize( n );
+
+	/*
+	------------------------------------------------------------
+	compute forward DFT
+	------------------------------------------------------------
+	*/
+	for( size_t k = 0; k < n; k++ )
+	{
+		float sum_re = 0.0f;
+		float sum_im = 0.0f;
+
+		for( size_t i = 0; i < n; i++ )
+		{
+			float ang = -twopi * (float)k * (float)i / (float)n;
+
+			float c = cosf( ang );
+			float s = sinf( ang );
+
+			sum_re += vin[i] * c;
+			sum_im += vin[i] * s;
+		}
+
+		vout[k] = complex<float>( sum_re, sum_im );
+	}
+
+	/*
+	------------------------------------------------------------
+	optional normalisation
+	------------------------------------------------------------
+	*/
+	if( b_normalise )
+	{
+		float scale = 1.0f / (float)n;
+
+		for( size_t k = 0; k < n; k++ )
+		{
+			vout[k] *= scale;
+		}
+	}
+
+	/*
+	------------------------------------------------------------
+	human format spectrum (fftshift)
+
+	move negative frequencies to beginning
+	------------------------------------------------------------
+	*/
+	if( b_human_format )
+	{
+		vector< complex<float> > vtmp( n );
+
+		size_t half = n / 2;
+
+		for( size_t i = 0; i < n; i++ )
+		{
+			size_t src = ( i + half ) % n;
+			vtmp[i] = vout[src];
+		}
+
+		vout.swap( vtmp );
+	}
+
+	/*
+	------------------------------------------------------------
+	compute magnitude spectrum
+	------------------------------------------------------------
+	*/
+	for( size_t k = 0; k < n; k++ )
+	{
+		float re = vout[k].real();
+		float im = vout[k].imag();
+
+		vout_mag[k] = sqrtf( re * re + im * im );
+	}
+
+
+vector<float> vx0;
+int cnt = vout_mag.size();
+
+//build x axis freq vector
+for ( int i = 0; i < cnt; i++ )
+	{		
+//	float f0 = sqrtf( (float)fftwoc0[i][0]*(float)fftwoc0[i][0] + (float)fftwoc0[i][1]*(float)fftwoc0[i][1] );
+	
+	float bin_bw = srate_in / cnt;
+	vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
+	
+//		vf1.push_back( f0 / cnt );
+	}
+
+
+
+//printf("vx size %d   vsp size %d\n", vx0.size(), vsp.size() );
+
+	string s1 = "plot_spect_discete()";
+	int gph_idx = 0;						//only one graph that has multiple traces
+	gph->copy_label( s1.c_str() );
+
+	gph->position( 900, 30 );
+ 	gph->font_size( 9 );
+	gph->set_sig_dig( 2 );
+	gph->sample_rect_hints_distancex = 0;
+	gph->sample_rect_hints_distancey = 0;
+
+//	gph->scale_y( gph_idx, 1.0, 1.0, 1.0, 0.1 );
+//	gph->shift_y( gph_idx, 0.0, 0.0, -0.00, -0.0 );
+
+	gph->shift_y( gph_idx, 0, 0.0f, 0.0f, 0.0f);
+
+//	gph1.yunits_perpxl[0] = -1;
+//	gph->max_defl_y[ 0 ] = 20;
+
+	gph->plotxy_vfloat_1( vx0, vout_mag );
+
+	gph->fit_plot( 0 );
+	
+
+return 1;
+}
+
+
+
+
+
+
+
+
+//see 'plot_spect_discrete_float()' for description
+bool fast_mgraph::plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, vector<double> &vin )
+{
+
+fast_mgraph *gph = this;
+
+vector< complex<double> > vout;
+vector<double> vout_mag;
+bool b_add_neg_spectrum = 1;
+bool b_human_format = 1;
+
+	size_t n = vin.size();
+
+	if( n == 0 )
+	{
+		return 0;
+	}
+
+	vout.resize( n );
+	vout_mag.resize( n );
+
+	/*
+	------------------------------------------------------------
+	compute forward DFT
+	------------------------------------------------------------
+	*/
+	for( size_t k = 0; k < n; k++ )
+	{
+		double sum_re = 0.0;
+		double sum_im = 0.0;
+
+		for( size_t i = 0; i < n; i++ )
+		{
+			double ang = -twopi * (double)k * (double)i / (double)n;
+
+			double c = cos( ang );
+			double s = sin( ang );
+
+			sum_re += vin[i] * c;
+			sum_im += vin[i] * s;
+		}
+
+		vout[k] = complex<double>( sum_re, sum_im );
+	}
+
+	/*
+	------------------------------------------------------------
+	optional normalisation
+	------------------------------------------------------------
+	*/
+	if( b_normalise )
+	{
+		double scale = 1.0 / (double)n;
+
+		for( size_t k = 0; k < n; k++ )
+		{
+		vout[k] *= scale;
+		}
+	}
+
+	/*
+	------------------------------------------------------------
+	human format spectrum (fftshift)
+
+	move negative frequencies to beginning
+	------------------------------------------------------------
+	*/
+	if( b_human_format )
+	{
+		vector< complex<double> > vtmp( n );
+
+		size_t half = n / 2;
+
+		for( size_t i = 0; i < n; i++ )
+		{
+			size_t src = ( i + half ) % n;
+			vtmp[i] = vout[src];
+		}
+
+		vout.swap( vtmp );
+	}
+
+	/*
+	------------------------------------------------------------
+	compute magnitude spectrum
+	------------------------------------------------------------
+	*/
+	for( size_t k = 0; k < n; k++ )
+	{
+		double re = vout[k].real();
+		double im = vout[k].imag();
+
+		vout_mag[k] = sqrt( re * re + im * im );
+	}
+
+
+vector<double> vx0;
+int cnt = vout_mag.size();
+
+//build x axis freq vector
+for ( int i = 0; i < cnt; i++ )
+	{		
+//	float f0 = sqrtf( (float)fftwoc0[i][0]*(float)fftwoc0[i][0] + (float)fftwoc0[i][1]*(float)fftwoc0[i][1] );
+	
+	float bin_bw = srate_in / cnt;
+	vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
+	
+//		vf1.push_back( f0 / cnt );
+	}
+
+
+
+//printf("vx size %d   vsp size %d\n", vx0.size(), vsp.size() );
+
+	string s1 = "plot_spect_discete()";
+	int gph_idx = 0;						//only one graph that has multiple traces
+	gph->copy_label( s1.c_str() );
+
+	gph->position( 900, 30 );
+ 	gph->font_size( 9 );
+	gph->set_sig_dig( 2 );
+	gph->sample_rect_hints_distancex = 0;
+	gph->sample_rect_hints_distancey = 0;
+
+//	gph->scale_y( gph_idx, 1.0, 1.0, 1.0, 0.1 );
+//	gph->shift_y( gph_idx, 0.0, 0.0, -0.00, -0.0 );
+
+	gph->shift_y( gph_idx, 0, 0.0f, 0.0f, 0.0f);
+
+//	gph1.yunits_perpxl[0] = -1;
+//	gph->max_defl_y[ 0 ] = 20;
+
+	gph->plotxy_vdouble_1( vx0, vout_mag );
+
+	gph->fit_plot( 0 );
+	
+
+return 1;
+}
+
+
 
 
 //-------------------------------------------------------------------------------

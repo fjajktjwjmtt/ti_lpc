@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //GCLed.h
-//---- v1.09
+//---- v1.11
 
 #ifndef gcled_h
 #define gcled_h
@@ -71,7 +71,9 @@ int idelta_r;						//for brightness offset of currently shown led col
 int idelta_g;
 int idelta_b;
 int last_event;
-
+bool b_mousewheel_invert;												//v1.11
+int mousewheel;
+int mousewheel_last;
 
 
 private:

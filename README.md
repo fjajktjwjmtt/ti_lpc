@@ -1,22 +1,31 @@
-Aug 2024 v1.08
+Mar 2026 v1.09
 
 ## ti_lpc
 Texas Instrument Speak & Spell synthesizer, renders rom sounds/vocal hex strings to PC sound hardware/sound files. 
 
-The Speak & Spell developed in the late 1970s made use of a TMS5100 digital signal processor chip (DSP) for speech decoding. Briefly: the chip contained glottal chirp sound source(vowels), white noise source(consonants,etc), an adjustable lattice filter and a D/A converter. Either of the 2 sound sources were fed in varying proportions to the adj lattice filter (which shaped them, the glottal source becoming formants), this then fed the D/A converter to produce analog audio. The chip was an amazing engineering achievement at that time. The speech encoding made use of linear prediction coding (LPC) which greatly reduced data rates and therefore chip count, this allowed cost effective mass production. The audio encoding was done at the factory and stored in seperate roms as bit strings. It is these rom bit strings which were read by the above mentioned chip that controlled its elements and produced fluid sound articulation. Two 16KB 8 bit roms were required to hold enough speech to make a clever useful educational tool. The bit strings which I call lpc strings below (hex byte strings), are segmented into frames, they contain which audio source to use, its period (pitch if a glottal source), amplitude gain, and filter coefficients.
+## Intro
+The Speak & Spell developed in the late 1970s made use of a TMS5100 digital signal processor chip (DSP) for speech decoding. Briefly: the chip contained glottal chirp sound source(vowels), white noise source(consonants,etc), an adjustable lattice filter and a D/A converter. The chip was an amazing engineering achievement at that time. The speech encoding made use of linear prediction coding (LPC) which greatly reduced data rates and therefore chip count, this allowed cost effective mass production. The audio encoding was done at the factory and stored in seperate roms as bit strings. It is these rom bit strings which were read by the above mentioned chip that controlled its elements and produced fluid sound articulation. One or two 16KB 8 bit roms were required to hold enough speech to make a clever useful educational tool. The bit strings which I call lpc strings below (hex byte strings), are segmented into frames, they contain which audio source to use, its period (i.e. the pitch if a glottal source), amplitude gain, and filter coefficients.
 
 The TMS5100 (aka TMC0280) evolved over the next few years with improvements in speech quality, e.g: TMS5110, TMS5200, TMS5220. Some difference are the glottal waveform shape and code lookup tables used for filter coefficients among other things. These changes make for incompatibility, so vocal rom strings for one version of chip won't work well or at all with other versions. This app has tables for 4 chip numbers mentioned, so try all 4 for best sound. You can also make changes to the tables for other chip versions not included.
 
+
+## How It Produces Speech
+The chirp sound (a brief waveform sample) is looped using a variable period to produce the required pitch, this mimics a vocal chord stimulus (glottis). If a consonant or fricative etc is required then a white noise random number generator is used in place of the chirp. Gain control is applied at this stage. The stimulus is then fed to a lattice filter which simulates the vocal tract. The lattice filter (via applied coefficients) effectively produces a signal which has freq resonances similar to what a vocal tract would impart. The resonances are known as formants (freq peaks), these produces vowel sounds when the chirp stimulus is used. The lattice filter will also shape the consonant/fricative stimulus changing its quality. The output of the lattice filter is then sent to the speaker via a digital to analogue converter and amplifier.
+
+
+## Code
 Some of the code is re-purposed from other projects I've tinkered with over the years, so excuse the antiquated c style, evolving conventions and inefficiencies.
 Also note the code is not precise in sound reproduction to the hardware, but it sounds close enough.
 
 Portions of this code come from the 'Speech library for Arduino' project:  https://github.com/going-digital/Talkie,
-You will find many lpc strings in that project to try, they are within c code files, but this app will accept cut/pasted versions of them, just copy the hex strings and comma delimiters, remove array names, equal signs, braces and semicolons.
+You will find many lpc strings in that project to try, they are within c code files, but this app will accept cut/pasted versions of them, use the 'SanitiseDlg' to help with this, it will remove: equal signs, braces, semicolons, etc, right click on the strings to see if they can be sounded correctly, then paste them in 'LPC hex byte strings' edit box if you want to make a collection for saving to file, see further details below.
 
 The app makes use of information from MAME project and the toil of numerous archivists(hackers), visit the mame site to see some amazing preservation coding.</br>
 
 Where pieces of code or ideas are originate from other people, the comments in source code will give links to who or where it came from.</br>
 
+
+## Further Information
 Some history:- https://www.vintagecomputing.com/index.php/archives/528/vcg-interview-richard-wiggins-talks-speak-spell</br>
 
 Some hardware details:- http://furrtek.free.fr/index.php?a=speakandspell&ss=1&i=2</br>
@@ -27,9 +36,9 @@ Side note:- Votrax produced a phoneme based (as opposed to LPC based) sythesizer
 ## Build
 The code was developed with gcc on Ubuntu 20.04 64 bit, may work for Windows, but has not been tested some time.</br>
 ##### For gui version:
-Requires: RTAudio (pre v6.0.1, see below if linking beyond this version), alsa/pulseaudio/jack, and FLTK libraries for linking, fltk-1.3.4-2 or better should work.</br>
+Requires: RTAudio v6.0.1, alsa/pulseaudio/jack, and FLTK libraries for linking, fltk-1.3.4-2 or better should work.</br>
 
-_[**If you have RTAudio at/above v6.0.1**, you need to use alternate versions of: '**gc_rtaudio.cpp**' and '**gc_rtaudio.h**', get these from my '**hrir_cmdline**' repository.]_
+_[**If you have RTAudio below v6.0.1**, you need to use alternate versions of: '**gc_rtaudio.cpp**' and '**gc_rtaudio.h**', alter makefile to point to these files: '**gc_rtaudio_v1.01.1.cpp**' and '**gc_rtaudio_v1.01.1.h**'
 
 Uses fltk's fluid gui designer for layout of main window controls and some code is held within the fluid's 'fluid.fl' def file, fluid generated 'fluid.h' and 'fluid.cxx'.</br>
 
@@ -50,7 +59,7 @@ Hover over controls to see a hint at what they do.</br>
 
 Place Speak & Spell unzipped roms in a dir (Roms are optional, see below). Get them from a MAME rom site, e.g: snspell.zip. Then select their dir path with the 2 'Sel' buttons.</br>
 
-Speak & Spell roms come in pairs (see below regarding single roms), e.g:</br> 
+Speak & Spell roms can come in pairs (see below regarding single roms), e.g:</br> 
 
 USA rom0 file: tmc0351n2l.vsm</br> 
 USA rom1 file: tmc0352n2l.vsm</br>
@@ -59,8 +68,8 @@ UK rom0 file: cd2303.vsm					//quick way to to hear difference is sounding the Z
 UK rom1 file: cd2304.vsm</br>
 
 
-Note: Some units only had one Rom, these Roms are organised differently and their alphabet (if it was a Speak and Spell), various phrases and tone addresses are unknown, this code will not correctly show these roms. You will have to explore these roms using various controls provided to help map out addresses of where things are stored.
- 
+Note: Some units only had one Rom, these Roms are organised differently and their alphabet (if it was a Speak and Spell), various phrases and beep tone addresses are unknown, this code will not correctly show these roms. You will have to explore these roms using various controls provided to help map out addresses of where things are stored. There were other devices that used TMS5100 series of chips, such as vehicle announcement systems.
+
 (Roms are optional, if you have hex/decimal speech strings you can use them as is without roms).
 
 
@@ -80,7 +89,7 @@ The app also generates a: '**zz_audio.au**' sound file after each sounding, the 
 
 Note: if you set an incorrect 'pc srate' (i.e: not matching your current pc's audio hardware samplerate) you will get pitch and duration errors (chipmunk/slo-mo).
 
-Long strings of speech (>20 secs of voicing) will take some time to render and be heard, it may appear the app has locked up, but if you ran app from a command line you will see it's probably still processing audio by the console output.
+Long strings of speech (>20 secs of voicing) will take some time to render and be heard, it may appear the app has locked up, but if you ran app from a command line you will see it's probably still processing audio by the console output. Playing a string that was not meant to be fed into your currently selected tmsxxxx chip may also cause the appearence that the app is locked up.
 
 Use 'AEdit' button to open your favourite audio editor, it runs a script/bat file and passes the saved .au audio filename you specified (or 'zz_audio.au'), edit the script or batch to call whatever audio app you prefer (script requires execution priveledges):
 (linux) 'open_audio_editor.sh'</br>

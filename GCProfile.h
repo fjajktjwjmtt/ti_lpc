@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //GCProfile.h
-//---- v1.82
+//---- v1.86
 
 
 #ifndef GCProfile_h
@@ -211,6 +211,7 @@ int LoadVectorInts( vector<int> &vint , char delimiter );
 int LoadVectorFloats( vector<float> &vfloat , char delimiter );
 int LoadVectorStrings( vector<string> &vstr , char delimiter );
 int LoadVectorStringsNotingUserQuotes( vector<string> &vstr , char delimit, char ch_quote, bool keep_single_quotes );
+int LoadVectorStringsWithinBoundingChars( vector<string> &vstr, char ch_bound_start, char ch_bound_end, bool b_ignore_bounds_in_quotes, bool b_remove_bound_chars, char ch_quote );	//v1.84
 void padstr(string &sret,int pad,int lim);
 void prepadstr(string &sret,int pad,int lim);
 void padstrchar(string &sret, char ch, int pad, int lim );
@@ -301,6 +302,7 @@ bool array_uint16_t_to_hex_str( uint16_t array[], int max_count, bool uppr_case,
 bool array_int16_t_to_decimal_str( int16_t array[], int max_count, string first_prefix, string individual_prefix, string delimit, string &sdecimal );
 bool array_uint32_t_to_hex_str( uint32_t array[], int max_count, bool uppr_case, string first_prefix, string hex_prefix, string delimit, string &shex );
 bool array_int32_t_to_decimal_str( int32_t array[], int max_count, string first_prefix, string individual_prefix, string delimit, string &sdecimal );
+int ExtractParamVal_with_no_value_with_delimit(string param, string delim, string &equ); //v1.85
 
 };
 

@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.18 	mgraph
 //v1.19 	fast_graph
 //v1.20 		surface3d
-//v1.22 	fast_graph/mgraph
+//v1.34 	fast_graph/mgraph
 
 #ifndef mgraph_h
 #define mgraph_h
@@ -108,6 +108,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
 using namespace std;
+
+#define pi ((float)(M_PI))
+#define twopi (2.0 * M_PI)
 
 
 #define cn_mgraph_trace_max 64
@@ -453,6 +456,8 @@ double shift_wheel_step;
 double wheel_gain;
 bool show_xyz_gain_text;
 
+
+
 public:
 surface3d( int x, int y, int w, int h, const char *label = 0 );
 
@@ -545,6 +550,34 @@ en_mls_cap_join_bevel = FL_JOIN_BEVEL,
 
 
 
+struct st_mgraph_user_marker_tag
+{
+string s0;
+string s1;
+string s2;
+double val0;
+double val1;
+double val2;
+
+int sel_offx0;															//selected point offset, low y vals are towards top of graph
+int sel_offy0;
+
+int font0;
+int font1;
+int font2;
+int font_size0;
+int font_size1;
+int font_size2;
+
+int col0_r, col0_g, col0_b;
+int col1_r, col1_g, col1_b;
+int col2_r, col2_g, col2_b;
+
+};
+
+
+
+
 
 
 struct pnt_tag
@@ -562,6 +595,12 @@ struct trace_tag
 {
 string label;
 vector<pnt_tag>pnt;
+
+bool user_marker_show;													//v1.25 see just below
+vector<st_mgraph_user_marker_tag> vuser_marker;							//v1.25, useful to give a selected plot point an access to further information, such as frequency (Hz), see functions: 'user_marker_show()'  'user_marker_add()' 'user_marker_idx_add()'
+vector<int> vuser_marker_idx;											//v1.25, indexes within 'vuser_marker[]'
+
+
 int id;                                     //this is useful to find the trace you want, if you don't know what order traces were push_back'd
 
 mg_col_tag col;
@@ -646,6 +685,8 @@ int sample_rect_hints_distancey;			//same as above, NOTE: if the graph is displa
 
 bool sample_rect_flicker;					//momentarily flickers sample rectangle hinting when mouse is moved
 
+
+
 //------------------------------------------------------------------------------------
 
 
@@ -658,6 +699,9 @@ void *left_double_click_cb_args;
 
 void (*middle_click_cb_p_callback)( void *args );                //see add_trace() to init this to zero
 void *middle_click_cb_args;
+
+void (*middle_double_click_cb_p_callback)( void *args );         //see add_trace() to init this to zero
+void *middle_double_click_cb_args;
 
 
 void (*right_click_cb_p_callback)( void *args );                //see add_trace() to init this to zero
@@ -814,8 +858,6 @@ int woffx;
 int woffy;
 int sizex;
 int sizey;
-int mousex, mousey;
-int double_click_left;
 bool inside_control;
 
 int idx_maxx;
@@ -848,12 +890,13 @@ vector<int> vtrace_offx;
 vector<int> vtrace_offy;
 vector<int> vtrace_wid;
 vector<int> vtrace_hei;
-vector<int> vtrace_midx;
-vector<int> vtrace_midy;
+vector<double> vtrace_midx;												//v1.29
+vector<double> vtrace_midy;												//v1.29
 vector<int> vtrace_id;
-vector<int> vplot_offsx;
-vector<int> vplot_offsy;
-vector<int> vtrace_minx;												//v1.16
+vector<double> vplot_offsx;												//v1.29
+vector<double> vplot_offsy;												//v1.29
+//vector<int> vtrace_minx;												//v1.16
+vector<double> vtrace_minx;												//v1.29
 
 
 void (*left_click_anywhere_cb_p_callback)( void *args );            //non trace specific
@@ -864,6 +907,17 @@ void *left_click_release_cb_args;
 
 void (*left_double_click_anywhere_cb_p_callback)( void *args );
 void *left_double_click_anywhere_cb_args;
+
+
+void (*middle_click_anywhere_cb_p_callback)( void *args );
+void *middle_click_anywhere_cb_args;
+
+void (*middle_click_release_cb_p_callback)( void *args );
+void *middle_click_release_cb_args;
+
+void (*middle_double_click_anywhere_cb_p_callback)( void *args );
+void *middle_double_click_anywhere_cb_args;
+
 
 void (*right_click_anywhere_cb_p_callback)( void *args );
 void *right_click_anywhere_cb_args;
@@ -884,14 +938,28 @@ void *mouseleave_cb_args;
 
 public:
 bool left_button;
-bool right_button;
 bool middle_button;
+bool right_button;
+int double_click;														//loaded with 'Fl::event_clicks();
+int double_click_left;
+int double_click_middle;
+int double_click_right;
+
+int mousex, mousey;														//v1.26		these are fltk vals less widget offset, e.g:  'Fl::event_x() - x()'
+int mousex_internal, mousey_internal;									//v1.26
+
+bool control_key;														//v1.27
+bool shift_key;
+int last_key;
+
 int b_invert_wheel;
+int mouse_dir;															//v1.08, this is also affected by 'b_invert_wheel'
 int mousewheel;
 bool sample_rect_showing[cn_mgraph_trace_max];							//will toggle if user double clicks
 
 vector<trace_tag>trce;
 int rect_size;
+int rect_size_sel;														//v1.31
 int graph_id;							//place a unique id value here
 mg_col_tag border_col;
 mg_col_tag background;
@@ -966,6 +1034,10 @@ int clip_vporttop;						//NOTE: 'clip_vporttop' here is in an increasing directi
 int clip_vportbot;
 
 
+int dbg_type;															//for drawing checks, set:  '1' for 'draw_circle_debug_int()'  or  '2' for draw_circle_debug_float()'  -- these are called via 'draw()'
+int idbg0, idbg1, idbg2, idbg3, idbg4, idbg_r, idbg_g, idbg_b;			//loadfor drawing checks
+float fdbg0, fdbg1, fdbg2, fdbg3;										//for drawing checks
+
 
 int last_mousex;				//holds pos vals covering the graticule (the border gaps being removed - also sent to: mousemove_cb_p_callback )
 int last_mousey;
@@ -977,12 +1049,34 @@ int drw_cnt;
 int mousemove_cnt;
 
 
+bool b_show_hov_nearest_sample;											//v1.31
+int hov_nearest_sample_trc;
+int hov_nearest_sample_range;											//is set to e.g: 2, will show 5 samples, actual nearest sample plus 2 samples either side if any
+vector<int> vhov_nearest_sample_idx;									//holds one or more sample indexes
+int hov_nearest_sample_idx;												//this is set to the last nearest sample the mouse hov'd close to
+vector<int>vhov_nearest_sample_range_idx;								//range of sample indexes around nearest sample including nearest sample
+mg_col_tag hov_nearest_col;
+int hov_nearest_linewidth;
+int hov_nearest_linestyle;
+int hov_nearest_sample_circle_radiusx;
+int hov_nearest_sample_circle_radiusy;
+
+
+
 public:
 mgraph( int x, int y, int w, int h, const char *label = 0 );
 ~mgraph();
 void clear_traces();
 void clear_trace( int idx );
 void add_trace( trace_tag &tr );
+
+
+void user_marker_show( unsigned int trce_idx, bool user_marker_show );							//v1.25
+void user_marker_add( unsigned int trce_idx, vector<st_mgraph_user_marker_tag> &vv  );			//v1.25
+void user_marker_idx_add( unsigned int trce_idx, vector<int> &vidx );							//v1.25
+
+
+
 void render( int ref_id_in );
 bool get_sample_count_for_trc( int trc, int &count );
 bool get_sample_count_using_id( int trc_id, int &count );
@@ -1006,8 +1100,12 @@ void get_trace_maxy( int trc, int &idx, double &x );
 void set_left_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );            //not trace specific
 void set_left_double_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );
 
+void set_middle_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );
+void set_middle_double_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );
+
 void set_right_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );
 void set_right_double_click_anywhere_cb( void (*p_cb)( void* ), void *args_in );
+
 void set_mouseenter_cb( void (*p_cb)( void* ), void *args_in );
 void set_mouseleave_cb( void (*p_cb)( void* ), void *args_in );
 
@@ -1017,6 +1115,8 @@ bool set_left_double_click_cb( int trc, void (*p_cb)( void* ), void *args_in );
 void set_left_click_release_cb( void (*p_cb)( void* ), void *args_in );
 
 bool set_middle_click_cb( int trc, void (*p_cb)( void* ), void *args_in );
+bool set_middle_double_click_cb( int trc, void (*p_cb)( void* ), void *args_in );
+void set_middle_click_release_cb( void (*p_cb)( void* ), void *args_in );
 
 bool set_right_click_cb( int trc, void (*p_cb)( void* ), void *args_in );
 bool set_right_double_click_cb( int trc, void (*p_cb)( void* ), void *args_in );
@@ -1077,7 +1177,7 @@ void get_mouse_pixel_position_on_background( int &mx, int &my );
 bool get_mouse_pixel_position_on_trace( int trc, int &mx, int &my );
 
 bool get_mouse_position_relative_to_trc( int trc, double &mx, double &my );			// SEE also !!!! get_mouse_position_relative_to_trc_new()
-bool get_mouse_position_relative_to_trc_new( int trc, double &mx, double &my );
+//bool get_mouse_position_relative_to_trc_new( int trc, double &mx, double &my );	//v1.29
 
 bool set_left_edge_sample_idx( int trc, int left_idx );
 bool calc_draw_coords_for_trc_sample( int trc, int samp_idx, int &ix, int &iy );
@@ -1098,11 +1198,21 @@ bool get_plot_offsy( int trc, int &val );
 void get_mouse( int &mx, int &my );
 bool get_pixel_position_as_trc_values( int trc, int px, int py, double &valx, double &valy );
 
+bool get_left_and_right_edge_sample_indexes( int trc, int &left_idx, int &right_idx );			//v1.29
+void draw_circle_debug_int( int ix, int iy, int iw, int ih, int rr, int gg, int bb );			//v1.29
+void draw_circle_debug_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb );		//v1.29
+bool get_distance_of_index_to_pixel_coord( int trc, unsigned int idx, int coordx, int coordy, double &dist );		//v1.29
+bool hov_nearest_sample_build( unsigned int trc, int px, int py );										//v1.31
+void draw_circle_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb );
+void draw_rect_float( float fx, float fy, int iw, int ih, int rr, int gg, int bb );
+//void user_marker_set_curr_idx( unsigned int idx );							//v1.25, index to 'vuser_marker'
+
 
 private:
 void draw();
 int handle( int );
-bool get_mouse_vals_internal( int trc, int mx, int my, double &x, double &y, bool get_as_hover );
+bool get_mouse_vals_internal( int trc, int mx, int my, double &x, double &y, bool get_as_hover, int &min_trc, int &min_idx, double &min_dist );
+bool get_mouse_vals_internal_old( int trc, int mx, int my, double &x, double &y, bool get_as_hover );
 int get_trace_idx_from_id( int id );
 void clip_draw_line( int xx, int yy, int xxx, int yyy );
 int rect_clip( int xx, int yy, int dx, int dy );
@@ -1117,13 +1227,9 @@ bool clip_poly( vector<clip_coord_tag> vcrd_in, vector<clip_coord_tag> &vcrd_cli
 int compute_outcode( int xx, int yy );
 bool line_clip( int &x1_in, int &y1_in, int &x2_in, int &y2_in );
 void clip_draw_point( int xx, int yy );
-
-
 };
 
 //-----------------------
-
-
 
 
 
@@ -1136,6 +1242,8 @@ void clip_draw_point( int xx, int yy );
 
 #define cn_fast_mgraph_cnt_max 32
 #define cn_fast_mgraph_trc_cnt_max 4
+#define cn_fast_graph_y_tick_range_size 13								//v1.29  number of ranges coded,   search for: 'desirable tick values'
+#define cn_fast_graph_y_tick_range_values_size 9						//v1.29  number of tick values in 'y_tick_range_values[]'     search for: 'desirable tick values'
 
 
 //simple to use graphing class
@@ -1151,7 +1259,6 @@ int graph0_hei;									//for menu display shrink/restore
 int sig_dig;
 int wnd_cur_wid;
 int wnd_cur_hei;
-
 
 
 public:
@@ -1197,6 +1304,7 @@ bool keya[ cn_fast_mgraph_cnt_max ];
 bool keyf[ cn_fast_mgraph_cnt_max ];
 bool keyy[ cn_fast_mgraph_cnt_max ];
 bool keym[ cn_fast_mgraph_cnt_max ];
+bool keyp[ cn_fast_mgraph_cnt_max ];									//v1.24
 bool keys[ cn_fast_mgraph_cnt_max ];
 bool keyshift[ cn_fast_mgraph_cnt_max ];
 int sel_idx1[ cn_fast_mgraph_cnt_max ];
@@ -1213,6 +1321,14 @@ vector<double> vtrc_recy2[ cn_prev_plot_rec_max ];
 vector<double> vtrc_recy3[ cn_prev_plot_rec_max ];
 vector<double> vtrc_recy4[ cn_prev_plot_rec_max ];
 
+
+bool user_marker_show_cache[cn_fast_mgraph_cnt_max];									//v1.25 see just below
+vector<st_mgraph_user_marker_tag> vuser_marker_cache[cn_fast_mgraph_cnt_max];			//v1.25, useful to give a selected plot point an access to further information, such as frequency (Hz), see functions: 'user_marker_show()'  'user_marker_add()' 'user_marker_idx_add()'
+vector<int> vuser_marker_idx_cache[cn_fast_mgraph_cnt_max];								//v1.25, indexes within 'vuser_marker[]'
+
+
+
+
 string trc_label[ cn_fast_mgraph_cnt_max ];					//if user wants to label a trace using the trace's colour key,
 mg_col_tag color_trc[ cn_fast_mgraph_cnt_max ];				//also used for trc_label
 mg_col_tag col_hover_text[cn_fast_mgraph_cnt_max];				//used for hover text colour
@@ -1222,6 +1338,10 @@ double scale_trc_y[ cn_fast_mgraph_cnt_max ][cn_fast_mgraph_trc_cnt_max];
 double max_defl_y[ cn_fast_mgraph_cnt_max ];					//value that should be shown as maximum y deflection, modifies 'yunits_perpxl[]' in 'update_fg_user_obj()', user adj via 'm' key and mousewheel
 double shift_trc_y[ cn_fast_mgraph_cnt_max ][cn_fast_mgraph_trc_cnt_max];
 float scale_change_h;										//global/static var
+
+double y_tick_range[cn_fast_graph_y_tick_range_size];					//v1.29, holds max 'y' value of each avail range between:  10.0 --> 1.0       search for: 'desirable tick values'
+double y_tick_range_values[cn_fast_mgraph_cnt_max][cn_fast_graph_y_tick_range_values_size];		//v1.29, holds tick values, e.g. for range '1.0':    0   0.125   0.25   0.375   0.5   0.625   0.75   0.825   1.0     search for: 'desirable tick values'
+double y_tick_range_scale[cn_fast_mgraph_cnt_max];						//v1.29, this is a scaling factor used to adj 'y_tick_range_values[][]', it's dependent on plot extreme 'y' vals encounted, see 'fit_plot()'         search for: 'desirable tick values'
 
 double pos_x;
 
@@ -1234,6 +1354,7 @@ bool drag_started;
 int multi_trace;								//if non zero more than one trace is shown on a single graph
 
 bool use_logx, use_logy;									//v1.13, for log10 plots
+double log_multiplier_x, log_multiplier_y;					//v1.33
 bool disp_vals_undo_logx, disp_vals_undo_logy;				//v1.13, useful to keep a log trace's displayed values linear (e.g. for freq values)
 double disp_vals_multiplier_x, disp_vals_multiplier_y;		//v1.13, useful for log plots, e.g: 20*log10, set to 20
 
@@ -1278,6 +1399,11 @@ int plot_updating_state;												//0: paused, 1: continuous, 2: recalling a p
 bool b_prev_plot_recording;												//will be slow if plots have many samples
 int prev_plot_rec_idx;													//this is the index of the currently recording plot
 int prev_plot_show_choice;												//0 is last plot, 1 is 2nd last plot, 2 is 3rd last plot, etc
+
+bool sample_rect_flicker;												//v1.29
+
+bool show_y_axis_guide_lines[ cn_fast_mgraph_cnt_max ];
+bool b_show_sel_dB_y;													//show dB value of sel sample's y value
 
 private:
 
@@ -1380,85 +1506,11 @@ void plotxy_vdouble_4( vector<double> &vx, vector<double> &vy1, vector<double> &
 void plot_grph_internal( int grph_idx );
 void select_first_sample_on_trc0_if_nothing_is_selected();
 void fit_plot( int grph_idx );
+void fit_plot_to_this_y_range( int grph_idx, double ymin, double ymax );
 
-
-/*
-//one graph, 2 traces
-void plot( vector<double> vf1, vector<double> vf2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plot( vector<float> vf1, vector<float> vf2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plot( double *d1, int cnt1, double *d2, int cnt2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plot( float *f1, int cnt1, float *f2, int cnt2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plot( int *i1, int cnt1, int *i2, int cnt2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-
-
-//one graph, 3 traces
-void plot( vector<double> vf1, vector<double> vf2, vector<double> vf3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plot( vector<float> vf1, vector<float> vf2, vector<float> vf3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plot( double *d1, int cnt1, double *d2, int cnt2, double *d3, int cnt3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plot( float *f1, int cnt1, float *f2, int cnt2, float *f3, int cnt3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plot( int *i1, int cnt1, int *i2, int cnt2, int *i3, int cnt3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-
-
-//one graph, 4 traces
-void plot( vector<double> vf1, vector<double> vf2, vector<double> vf3, vector<double> vf4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plot( vector<float> vf1, vector<float> vf2, vector<float> vf3, vector<float> vf4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plot( double *d1, int cnt1, double *d2, int cnt2, double *d3, int cnt3, double *d4, int cnt4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plot( float *f1, int cnt1, float *f2, int cnt2, float *f3, int cnt3, float *f4, int cnt4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plot( int *i1, int cnt1, int *i2, int cnt2, int *i3, int cnt3, int *i4, int cnt4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-
-
-//one graph, 1 trace, x, y required
-void plotxy( vector<double> vx, vector<double> vy1, const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( vector<float> vfx, vector<float> vfy1,const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( vector<int> vix, vector<int> viy1, const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( float *arrx, float *arry1, int cnt, const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( double *arrx, double *arry1, int cnt, const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int *arrx, int *arry1, int cnt, const char *col_trc1="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-
-
-//one graph, 2 traces, first trace x, y is supplied, 2nd trace only y is supplied and must be same length as first trace
-void plotxy( vector<double> vx, vector<double> vy1, vector<double> vy2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plotxy( vector<float> vfx, vector<float> vfy1, vector<float> vfy2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plotxy( vector<int> vix, vector<int> viy1, vector<int> viy2, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plotxy( float *arrx, float *arry1, float *arry2, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plotxy( double *arrx, double *arry1, double *arry2, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-void plotxy( int *arrx, int *arry1, int *arry2, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="" );
-
-
-//one graph, 3 traces, first trace x, y is supplied, 2nd/3rd traces only y is supplied and must be same length as first trace
-void plotxy( vector<double> vx, vector<double> vy1, vector<double> vy2, vector<double> vy3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plotxy( vector<float> vfx, vector<float> vfy1, vector<float> vfy2, vector<float> vfy3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plotxy( vector<int> vix, vector<int> viy1, vector<int> viy2, vector<int> viy3, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plotxy( float *arrx, float *arry1, float *arry2, float *arry3, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plotxy( double *arrx, double *arry1, double *arry2, double *arry3, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-void plotxy( int *arrx, int *arry1, int *arry2, int *arry3, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="" );
-
-
-//one graph, 4 traces, first trace x, y is supplied, 2nd/3rd/4th traces only y is supplied and must be same length as first trace
-void plotxy( vector<double> vx, vector<double> vy1, vector<double> vy2, vector<double> vy3, vector<double> vy4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plotxy( vector<float> vfx, vector<float> vfy1, vector<float> vfy2, vector<float> fy3, vector<float> vfy4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plotxy( vector<int> vix, vector<int> viy1, vector<int> viy2, vector<int> viy3, vector<int> viy4, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plotxy( float *arrx, float *arry1, float *arry2, float *arry3, float *arry4, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plotxy( double *arrx, double *arry1, double *arry2, double *arry3, double *arry4, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-void plotxy( int *arrx, int *arry1, int *arry2, int *arry3, int *arry4, int cnt, const char *col_trc1="brwn", const char *col_trc2="drkg", const char *col_trc3="drkcy", const char *col_trc4="drkr", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="", const char *trc_label2="", const char *trc_label3="", const char *trc_label4="" );
-
-
-//multiple graphs, one trace
-void plot( int gph_idx, vector<double> vdbl, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plot( int gph_idx, vector<float> vf, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plot( int gph_idx, vector<int> vint, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plot( int gph_idx, float *arr, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plot( int gph_idx, double *arr, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plot( int gph_idx, int *arr, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-
-//multiple graphs, x, y supplied and must be same length 
-void plotxy( int gph_idx, vector<float> vx, vector<float> vy, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int gph_idx, vector<double> vx, vector<double> vy, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int gph_idx, vector<int> x, vector<int> vy, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int gph_idx, float *arrx, float *arry, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int gph_idx, double *arrx, double *arry, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-void plotxy( int gph_idx, int *arrx, int *arry, int cnt, const char *col_trc="brwn", const char *col_bkgd="ofw", const char *col_axis="drkb", const char *col_text="drkgry", const char *trc_label1="" );
-*/
+void user_marker_show( unsigned int trce_idx, bool user_marker_show );					//v1.25
+void user_marker_add( unsigned int trce_idx, vector<st_mgraph_user_marker_tag> &vv );	//v1.25
+void user_marker_idx_add( unsigned int trce_idx, vector<int> &vidx );					//v1.25
 
 
 void update_fg_user_obj( int graph_idx );
@@ -1470,6 +1522,9 @@ void back_fill( int req_cnt, vector<double> &vv );
 bool set_left_click_cb( void (*p_cb)( void* ), void *args_in );
 bool set_middle_click_cb( void (*p_cb)( void* ), void *args_in );
 bool set_right_click_cb( void (*p_cb)( void* ), void *args_in );
+bool tick_range_y_build( unsigned int trc, unsigned int which_range, bool verbose );
+bool plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, vector<float> &vin );
+bool plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, vector<double> &vin );
 
 private:
 int handle( int e );
@@ -1477,6 +1532,42 @@ int handle( int e );
 };
 
 //-------------------------------------------------------------------------------
+
+
+
+//-------------------------------------------------------------------------------
+namespace dsp_utils_code
+{
+//can handle float or double 'vv'
+//uses doubles for theta inc, this helps if freq0 is high
+template< typename T >
+void make_sine( unsigned int srate, double freq0, double ampl0, double dc_offset, unsigned int cnt, std::vector<T> &vsine )
+{
+vsine.clear();
+vsine.reserve( cnt );
+
+double time_per_sample = 1.0 / (double)srate;
+
+double theta0 = 0.0;
+double theta_inc = freq0 * twopi * time_per_sample;
+
+for( int i = 0; i < cnt; i++ )
+	{
+	double f0 = dc_offset + ampl0 * sin( theta0 );
+
+	vsine.push_back( (T)f0 );
+
+	theta0 += theta_inc;
+
+	// wrap phase for both +ve and -ve freq
+	if( theta0 >= twopi ) theta0 -= twopi;
+	if( theta0 < 0.0 ) theta0 += twopi;
+	}
+}
+
+}	//namespace dsp_utils
+//-------------------------------------------------------------------------------
+
 
 
 #endif

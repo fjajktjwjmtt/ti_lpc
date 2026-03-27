@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2024 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.02     20-09-2014
 //v1.03     07-feb-2017
 //v1.04     03-may-2017
+//v1.05
 
 #ifndef GCCol_h
 #define GCCol_h
@@ -31,7 +32,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <FL/Enumerations.H>
 #include <FL/fl_draw.H>
 #include <FL/Fl_Color_Chooser.H>
-
+#include <FL/fl_ask.H>													//v1.05 for 'fl_input()'
+#include "GCProfile.h"													//v1.05 
 
 
 using namespace std;
@@ -60,6 +62,7 @@ class GCCol : public Fl_Widget
 {
 private:
 bool left_button;
+bool right_button;
 int capture_col;								//1=red , 2=grn, 3=blue
 gccol_tag obj_r;
 gccol_tag obj_g;
@@ -70,6 +73,9 @@ int mix_box_ll;
 int mix_box_rr;
 int mix_box_tt;
 int mix_box_bb;
+
+bool b_allow_right_click_dialog;
+bool b_show_decimal_val_while_adj;
 
 //void (*pCallback)( Fl_Widget *w, void* e );
 

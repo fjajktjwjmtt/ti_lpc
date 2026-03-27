@@ -1,5 +1,5 @@
 # data file for the Fltk User Interface Designer (fluid)
-version 1.0304
+version 1.0308
 header_name {.h}
 code_name {.cxx}
 decl {\#include "ti_lpc.h"} {public global
@@ -36,7 +36,7 @@ Function {main_window()} {open
 } {
   Fl_Window {} {
     label ti_lpc_app open
-    xywh {626 79 990 970} type Double labelsize 11 resizable visible
+    xywh {814 59 990 970} type Double labelsize 11 resizable visible
   } {
     Fl_Menu_Bar meMain {open
       xywh {0 0 990 20}
@@ -68,22 +68,22 @@ Function {main_window()} {open
     }
     Fl_Text_Editor te_romaddr {
       label { }
-      tooltip {lpc addresses from rom (hex), hit Enter button to add to this, right click on an address to render audio} xywh {840 197 50 178}
+      tooltip {lpc addresses from rom (hex), hit Enter button to add to this, right click on an address to render audio} xywh {840 197 50 186}
       class mytexteditor2
     }
     Fl_Text_Editor te_lpcdata {
       label {LPC hex byte strings}
-      tooltip {lpc hex byte stream, one stream per line, right click on a line to render audio} xywh {245 196 595 180} labelsize 12 align 5
+      tooltip {lpc hex byte stream, one stream per line, right click on a line to render audio, anything before a colon is considered to be a label and is not sounded} xywh {245 203 595 180} labelsize 12 align 5
       class mytexteditor
     }
     Fl_Text_Editor te_wordlist {
-      label {Speak Spell's Rom Contents (UK/USA)} selected
-      tooltip {word lists read from both roms (only valid for Speak & Spell rom pairs), right click on an address on the left to render audio} xywh {5 196 240 180} labelsize 12 align 5
+      label {Speak Spell's Rom Contents (UK/USA)}
+      tooltip {word lists read from both roms (only valid for Speak & Spell rom pairs), right click on an address on the left to render audio} xywh {5 203 240 180} labelsize 12 align 5
       class mytexteditor2
     }
     Fl_Text_Editor te_chirp {
       label {tms5xxx code table}
-      tooltip {enter hex byte (or decimal number) strings, one line per param, chirp wfm, energy, pitch count, pitch, 10 lattice iir filter(k0-->k9) lookup codes, click on buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx=0A,0xa,... for hex)} xywh {5 398 910 222} labelsize 13 align 5
+      tooltip {enter hex byte (or decimal number) strings, one line per param, chirp wfm, energy, pitch count, pitch, 10 lattice iir filter(k0-->k9) lookup codes, click on buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx=0A,0xa,... for hex)} xywh {5 413 910 222} labelsize 13 align 5
     }
     Fl_Input fi_romaddr {
       label {addr:}
@@ -110,8 +110,8 @@ Function {main_window()} {open
       callback cb_fi_srate
       tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set, you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 textsize 11
     }
-    Fl_Group fluid_gph1 {open
-      xywh {5 620 970 320}
+    Fl_Group fluid_gph1 {open selected
+      xywh {5 635 970 320}
     } {}
     Fl_Button {} {
       label {+}
@@ -175,12 +175,12 @@ Function {main_window()} {open
     Fl_Button {} {
       label tms5100
       callback cb_bt_tms5100
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 509 65 20} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 509 67 22} labelsize 11
     }
     Fl_Button {} {
       label tms5220
       callback cb_bt_tms5220
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 581 65 20} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 587 65 24} labelsize 11
     }
     Fl_Button {} {
       label {+last}
@@ -190,7 +190,7 @@ Function {main_window()} {open
     Fl_Button {} {
       label tms5200
       callback cb_bt_tms5200
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 557 65 20} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 561 65 23} labelsize 11
     }
     Fl_Input fi_lpc_decimal {
       label {lpc decml:}
@@ -297,41 +297,52 @@ Function {main_window()} {open
     }
     Fl_Box bx_addr_hist_label {
       label {addr history (????/????):}
-      tooltip {Address auto stepping, enter params and hit Start button} xywh {605 175 135 15} labelsize 11
+      tooltip {Address auto stepping, enter params and hit Start button} xywh {605 177 135 15} labelsize 11
     }
     Fl_Button {} {
       label tms5110
       callback cb_bt_tms5110
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 533 65 20} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 535 65 22} labelsize 11
     }
     Fl_Button {} {
       label Load
       user_data 0
       callback cb_bt_hex_byte_text_file
-      tooltip {load lpc hex byte strings from text file} xywh {377 180 45 15} labelsize 9
+      tooltip {load lpc hex byte strings from text file} xywh {377 182 45 20} labelsize 10
     }
     Fl_Button {} {
       label Save
       user_data 1
       callback cb_bt_hex_byte_text_file
-      tooltip {save lpc hex byte strings to text file} xywh {425 180 45 15} labelsize 9
+      tooltip {save lpc hex byte strings to text file} xywh {425 182 45 20} labelsize 10
     }
     Fl_Button {} {
       label Load
       user_data 0
       callback cb_bt_tms_code_tables_text_file
-      tooltip {load tms code table from text file} xywh {147 382 45 15} labelsize 9
+      tooltip {load tms code table from text file} xywh {147 391 45 20} labelsize 10
     }
     Fl_Button {} {
       label Save
       user_data 1
       callback cb_bt_tms_code_tables_text_file
-      tooltip {save tms code table to text file} xywh {195 382 45 15} labelsize 9
+      tooltip {save tms code table to text file} xywh {195 391 45 20} labelsize 10
     }
     Fl_Button {} {
       label Sel
       callback cb_bt_aufile_sel
       tooltip {select .au audio file} xywh {628 96 35 20} labelsize 11
+    }
+    Fl_Button {} {
+      label {SanitiseDlg...}
+      user_data 1
+      callback cb_bt_sanitise_dlg
+      tooltip {opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup to strip c code symbols, useful if you obtained strings from other code projects} xywh {490 182 80 20} labelsize 10 hotspot
+    }
+    Fl_Check_Button ck_whisper {
+      label whisper
+      callback cb_ck_whisper
+      tooltip {uses white noise, in place of glottal chirp, this feature was not built into the tmsxxxx chip series} xywh {550 75 65 15} down_box DOWN_BOX labelsize 11
     }
   }
   code {tb_lpcdata = new Fl_Text_Buffer;
@@ -628,4 +639,21 @@ talk.say_repeat();} {}
 Function {cb_bt_aufile_sel(Fl_Widget*, void*)} {open return_type void
 } {
   code {select_au_file();} {}
+}
+
+Function {cb_bt_sanitise_dlg(Fl_Widget*, void*)} {open return_type void
+} {
+  code {cb_bt_sanitise_dlg_actual();} {}
+}
+
+Function {cb_ck_whisper(Fl_Widget *w, void *v)} {open return_type void
+} {
+  code {Fl_Check_Button *o=(Fl_Check_Button*)w;
+
+if( o->value()) b_whisper = 1;
+else b_whisper = 0;
+
+printf("cb_ck_wisper(): %d\\n", b_whisper );
+say_lpc_str(fi_lpc_hex->value());
+//talk.say_repeat();} {}
 }

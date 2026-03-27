@@ -30,6 +30,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //---- v1.07    2020-oct-04     //added 'set_mouse_button_changed_callback()' and public 'left_button' 'middle_button' 'right_button' state flags
 //---- v1.08    2023-jan-07     //added 'set_col_from_rgb()' and 'adj_brightness_offset()' and 'adj_brightness_of_col_index()'
 //---- v1.09    2023-oct-26     //added 'set_mouse_event_callback()' and 'last_event'
+//---- v1.10    2025-mar-01		//fixed colour reversal error between green and blue in function call params, refer: 'adj_brightness_of_col_index()'
+//---- v1.11    2026-mar-26		//added 'b_mousewheel_invert' and 'mousewheel' 'mousewheel_last',  added 'redraw()' to 'SetColIndex()'
+
 
 #include "GCLed.h"
 
@@ -127,6 +130,10 @@ for(int i=0;i<cnMaxColIndex;i++)
 	{
 	iR[i]=iG[i]=iB[i]=0;
 	}
+
+b_mousewheel_invert = 0;
+mousewheel = 0;
+mousewheel_last = 0;
 }
 
 
@@ -228,11 +235,6 @@ if ( ( e == FL_ENTER ) || ( e == FL_LEAVE ) || ( e == FL_FOCUS ) || ( e == FL_UN
 	}
 
 
-if( b_do_event_cb )
-	{
-	if( p_mouse_event_cb ) p_mouse_event_cb( cb_mouse_event_obj, cb_mouse_event_args );	//v1.09
-	}
-
 
 if ( e == FL_ENTER )		//v1.06, was 'e & FL_ENTER'
     {
@@ -294,6 +296,7 @@ if ( e == FL_RELEASE )
     need_redraw = 1;
 	}
 
+
 if ( e == FL_KEYDOWN )
 	{
     int key = Fl::event_key();
@@ -304,6 +307,27 @@ if ( e == FL_KEYDOWN )
 		dont_pass_on = 1;												//v1.05
 		}
     }
+
+
+if ( e == FL_MOUSEWHEEL )												//v1.11
+	{
+	mousewheel_last = mousewheel;
+	
+	int mw = Fl::event_dy();
+
+	if( b_mousewheel_invert ) mousewheel -= mw;
+	else mousewheel += mw;
+
+	need_redraw = 0;
+    dont_pass_on = 1;
+	}
+
+
+
+if( b_do_event_cb )
+	{
+	if( p_mouse_event_cb ) p_mouse_event_cb( cb_mouse_event_obj, cb_mouse_event_args );			//v1.09
+	}
 
 
 
@@ -330,6 +354,7 @@ iR[iIndex]=iRin;
 iG[iIndex]=iGin;
 iB[iIndex]=iBin;
 
+redraw();
 return 1;	
 }
 
@@ -373,8 +398,6 @@ return 1;
 
 
 
-//load colour indexes from a string like this: "255 0 0, 0 255 0, 0 0 255"
-//note that each rgb colour set is seperated from next set by a comma, there MUST be a space between primary colour values within each set  
 void GCLed::set_index_col_rgb( unsigned int idx, uint8_t rr, uint8_t bb, uint8_t gg  )
 {
 
@@ -420,7 +443,7 @@ redraw();
 
 
 //adj brightness by adding an offset to the spec led colour index
-void GCLed::adj_brightness_of_col_index( unsigned int idx, int idelta_r, int idelta_b, int idelta_g )
+void GCLed::adj_brightness_of_col_index( unsigned int idx, int idelta_r, int idelta_g, int idelta_b )	//v1.10
 {
 if( idx >= cnMaxColIndex ) return;
 

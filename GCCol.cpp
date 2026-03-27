@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2024 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,7 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //v1.03     07-feb-2017				//added FL_MOUSEWHEEL control of cols, extremes val limits now reached when dragging out past control's borders
 //v1.04     03-may-2017				//added 'show_user_col_dlg()', runs when user clicks in the RHS mix col box
-
+//v1.05     07-nov-2024				//added 'b_allow_right_click_dialog'  and  'b_show_decimal_val_while_adj'
 
 #include "GCCol.h"
 using namespace std;
@@ -47,6 +47,7 @@ align( FL_ALIGN_LEFT );
 //pCallback = 0;
 
 left_button = 0;
+right_button = 0;
 capture_col = 0;
 
 obj_r.val = 240;										//inital colour
@@ -55,6 +56,8 @@ obj_b.val = 180;
 
 changed = 0;
 showing_col_dlg = 0;
+b_allow_right_click_dialog = 1;
+b_show_decimal_val_while_adj = 1;
 
 }
 
@@ -236,6 +239,7 @@ if( do_callbck ) do_callback();
 
 bool GCCol::show_user_col_dlg()
 {
+
 showing_col_dlg = 1;
 
 unsigned char r = (unsigned char)obj_r.val;
@@ -264,6 +268,12 @@ return 0;
 
 void GCCol::draw()
 {
+string s1;
+
+int iF = fl_font();
+int iS = fl_size();
+
+
 mix_box_ll = x() + cn_gccol_xgap + cn_gccol_col_rec_wid + 2;
 mix_box_rr = mix_box_ll + cn_gccol_col_rec_wid - 1;
 mix_box_tt = y() + cn_gccol_yoffset;
@@ -388,10 +398,25 @@ fl_color( obj_r.val, obj_g.val, obj_b.val );
 fl_rectf( x() + cn_gccol_col_rec_wid + 2 , y() + 2 , cn_gccol_col_box_wid - 4, h() - 4 );	//show summed col
 
 
+
+if( left_button && b_show_decimal_val_while_adj )
+	{
+	fl_font( iF, 16 );
+	fl_color( 255,255,255 );
+
+	if( capture_col == 1 ) strpf( s1, "%d", obj_r.val );					//v1.05
+	if( capture_col == 2 ) strpf( s1, "%d", obj_g.val );
+	if( capture_col == 3 ) strpf( s1, "%d", obj_b.val );
+	
+	fl_draw( s1.c_str(), x() + 5, y() + h() / 2 + 5 );
+	}
+
 //  draw_label();
 
 //fl_rectf( x()+1, y() + 1, w() - 2, h() - 2 , iR[iIndex], iG[iIndex], iB[iIndex] );
 
+
+fl_font( iF, iS );
 
 }
 
@@ -407,6 +432,8 @@ int GCCol::handle(int e)
 bool need_redraw = 0;
 bool dont_pass_on = 0;
 bool do_callbck = 0;
+string s1, s2;
+mystr m1;
 
 //return Fl_Widget::handle(e);
 
@@ -537,6 +564,47 @@ if ( e == FL_PUSH )
 		dont_pass_on = 1;
 		need_redraw = 1;
 		}
+
+
+	if( Fl::event_button() == 3 )
+		{
+		curx = Fl::event_x();
+		cury = Fl::event_y();
+		right_button = 1;
+
+		if( b_allow_right_click_dialog )
+			{
+			strpf( s1, "%s", "Text Values for Copying   (--only accepts decimal changes--)" );
+			strpf( s2, "%d %d %d, Hex: 0x%02x 0x%02x 0x%02x, (%02x %02x %02x)", obj_r.val, obj_g.val, obj_b.val, obj_r.val, obj_g.val, obj_b.val, obj_r.val, obj_g.val, obj_b.val );
+
+			char *sz = fl_input( s1.c_str(), s2.c_str() );
+
+			if( sz != 0 )
+				{
+				m1 = sz;
+				m1.cut_at_first_find( s1, ",", 0 );
+				
+				int ir, ig, ib;
+				
+				sscanf( s1.c_str(), "%d %d %d", &ir, &ig, &ib );
+				
+				if( ir < 0 ) ir = 0;
+				if( ir > 255 ) ir = 255;
+				
+				if( ig < 0 ) ig = 0;
+				if( ig > 255 ) ig = 255;
+				
+				if( ib < 0 ) ib = 0;
+				if( ib > 255 ) ib = 255;
+				
+				obj_r.val = ir;
+				obj_g.val = ig;
+				obj_b.val = ib;
+				}
+			}
+		dont_pass_on = 1;
+		need_redraw = 1;
+		}
 	}
 
 
@@ -546,6 +614,13 @@ if ( e == FL_RELEASE )
 	if( Fl::event_button() == 1 )
 		{
 		left_button = 0;
+		capture_col = 0;
+		dont_pass_on = 1;
+		}
+
+	if( Fl::event_button() == 3 )
+		{
+		right_button = 0;
 		capture_col = 0;
 		dont_pass_on = 1;
 		}

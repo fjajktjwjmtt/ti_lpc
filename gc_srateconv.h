@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2023 BrerDawg
+Copyright (C) 2025 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //gc_srateconv.h
-//v1.08
+//v1.09
 
 #ifndef gc_srateconv_h
 #define gc_srateconv_h

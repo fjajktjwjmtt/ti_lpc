@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //globals.h
 //v1.01			
+//v1.03		27-mar-2026		//added 'mytexteditor3'
  
 #ifndef globals_h
 #define globals_h
@@ -207,6 +208,28 @@ int id0;
 
 public:											//public functions
 mytexteditor2( int X, int Y, int W, int H, const char* l );
+
+
+private:										//private functions
+int handle( int );
+
+};
+
+
+
+
+class mytexteditor3 : public Fl_Text_Editor
+{
+private:
+bool left_button;
+int wstart;
+int wend;
+
+public:
+int id0;
+
+public:											//public functions
+mytexteditor3( int X, int Y, int W, int H, const char* l );
 
 
 private:										//private functions

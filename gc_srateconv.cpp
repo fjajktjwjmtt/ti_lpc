@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2023 BrerDawg
+Copyright (C) 2025 BrerDawg
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.06		22-jul-2023			//moded for namespace 'filter_code::'
 //v1.07		18-sep-2023			//added namespace 'gc_srateconv_code'  and 'farrow_resample_double_vector()'
 //v1.08		16-oct-2023			//added 'qdss_resample_double_continuous()'   'qdss_resample_float_continuous()'
-
+//v1.09		29-mar-2025			//changed 'qdss_resample_float_vector()' to use 'qdss_resample_float_complete()'
 
 
 
@@ -68,7 +68,7 @@ namespace gc_srateconv_code
 //		  
  
 // wnwdth - is number of calc'd coeffs(taps) to use for the fir interpolation filter, bigger 'wnwdth' gives a quicker cutoff transition and
-//			better antialias lowpass filtering, but it increases execution times, try: 32, 64, 200(there is no need for it to be a factor of two)
+//			better antialias lowpass filtering, but it increases execution times, try: 32, 64, 200 (there is no need for it to be a factor of two)
 
 // buf - 	is a ptr to an buf holding source samples, best results are obtained if the samples are either side of
 //			the sample to generate, and that there are enough samples to match the fir coeff count spec with: wnwdth
@@ -94,7 +94,7 @@ namespace gc_srateconv_code
 //  	buf	= original data array
 //  	bufsz	= size of data array
 //  	fmax	= low pass filter cutoff frequency
-//  	fsrate		= sample rate
+//  	fsrate	= sample rate
 //  	wnwdth	= width of windowed Sinc used as the low pass filter
 
 //  	resamp() returns a filtered new sample point
@@ -150,7 +150,8 @@ return r_y;                  												//new filtered intermediate sample
 
 
 
-
+//see 'qdss_resample_float_complete()' which uses further floats
+//see 'qdss_resample()' for param desc
 float qdss_resample_float( float x, float *buf, unsigned int bufsz, double fmax, double fsrate, int wnwdth )
 {
 double r_g,r_w,r_a,r_snc,r_y;												//some local variables
@@ -194,7 +195,7 @@ return r_y;                  												//new filtered intermediate sample
 
 
 
-
+//see 'qdss_resample()' for param desc
 float qdss_resample_float_complete( float x, float *buf, unsigned int bufsz, float fmax, float fsrate, int wnwdth )
 {
 //return buf[(int)x];
@@ -653,7 +654,8 @@ return out * cn_farrow_gain_adj;
 
 
 
-
+//see 'qdss_resample()' for param desc,
+//'output_count' determines 'vout[]' sample rate, e.g: if 'output_count' is half size of 'vin[]', output srate will be twice the input srate (upsampling)
 bool qdss_resample_float_vector( int output_count, unsigned int srate_in, float fmax, int wnwdth, vector<float>vin, vector<float>&vout )
 {
 
@@ -668,7 +670,7 @@ float *ptr = vin.data();
 	float x = 0.0f;
 	for( int i = 0; i < output_count; i++ )
 		{
-		float ff = qdss_resample_float( x, ptr, bufsz, fmax, srate_in, wnwdth );
+		float ff = qdss_resample_float_complete( x, ptr, bufsz, fmax, srate_in, wnwdth );	//v1.09
 		
 		vout.push_back( ff );
 
@@ -775,7 +777,7 @@ return 1;
 
 
 //see 'qdss_resample()' for a desciption of what is code does, BUT additionaly, 
-//this version is 'frame buffer' freindly, allowing a stream of sample buffers to be supplied in succession and provides interpolation overlap across buffers,
+//this version is 'frame buffer' friendly, allowing a stream of sample buffers to be supplied in succession and provides interpolation overlap across buffers,
 //'x' is shifted backwards by 'wnwdth/2' so filter kernel convolution does not go past end of supplied 'buf',
 //when 'x' is near the end of 'buf' it also copies some tailing samples to 'head_bf' for use when function is next called with 'x' near zero, this allows filter kernel convolution
 //to access samples before 'buf[0]' (using the previous calls tailing samples),
@@ -906,7 +908,7 @@ return r_y;                  											//new filtered intermediate sample
 
 
 //see 'qdss_resample()' for a desciption of what is code does, BUT additionaly, 
-//this version is 'frame buffer' freindly, allowing a stream of sample buffers to be supplied in succession and provides interpolation overlap across buffers,
+//this version is 'frame buffer' friendly, allowing a stream of sample buffers to be supplied in succession and provides interpolation overlap across buffers,
 //'x' is shifted backwards by 'wnwdth/2' so filter kernel convolution does not go past end of supplied 'buf',
 //when 'x' is near the end of 'buf' it also copies some tailing samples to 'head_bf' for use when function is next called with 'x' near zero, this allows filter kernel convolution
 //to access samples before 'buf[0]' (using the previous calls tailing samples),
