@@ -68,7 +68,7 @@ UK rom0 file: cd2303.vsm					//quick way to to hear difference is sounding the Z
 UK rom1 file: cd2304.vsm</br>
 
 
-Note: Some units only had one Rom, these Roms are organised differently and their alphabet (if it was a Speak and Spell), various phrases and beep tone addresses are unknown, this code will not correctly show these roms. You will have to explore these roms using various controls provided to help map out addresses of where things are stored. There were other devices that used TMS5100 series of chips, such as vehicle announcement systems.
+Note: Some units only had one Rom, these Roms are organised differently and their alphabet (if it was a Speak and Spell), various phrases and beep tone addresses are unknown, this code will not correctly show these roms. You will have to explore these roms using various controls provided to help map out addresses of where things are stored. There were other devices that used TMS5xxx series of chips, such as vehicle announcement systems.
 
 (Roms are optional, if you have hex/decimal speech strings you can use them as is without roms).
 
