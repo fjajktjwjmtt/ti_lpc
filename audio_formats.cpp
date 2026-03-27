@@ -34,6 +34,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.07	---- 05-sep-2018				//added fp methods , see rem'd out code EXAMPLE: 'test_audio_format_fp()'
 //v1.08	---- 23-feb-2019				//in 'logpf()'	-- changed 'delete buf;'  to 'delete[] buf;'  -- discovered with valgrind,
 										//also see load_malloc() v1.08, where pch0, pch1 a freed and then realloc
+//v1.09	---- 06-oct-2024				//added: 'normalise_malloc()'
+//v1.10	---- 09-feb-2026				//moded: 'normalise_malloc()', removed unneeded passing of struct ref: 'st_audio_formats_tag &af'
 
 #include "audio_formats.h"
 
@@ -7117,6 +7119,7 @@ for( unsigned int i = 0; i < af.vch1.size(); i++ )
     }
 
 
+
 double scale = 1.0 / fabs( max );                           //work out what scale value will keep peak excursion to +/- 1.0
 if( fabs( min ) > fabs( max ) )
     {
@@ -7136,6 +7139,70 @@ for( unsigned int i = 0; i < af.vch1.size(); i++ )
 
 return 1;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//scale all audio channel so max/min levels don't exceed  '+/- max_val'
+//the relative level difference between channels is maintained
+//bool audio_formats::normalise( double max_val, st_audio_formats_tag &af )		//v1.09
+bool audio_formats::normalise_malloc( double max_val )					//v1.10
+{
+double min = 0;
+double max = 0;
+
+
+for( unsigned int i = 0; i < sizech0; i++ )
+    {
+    double dd = pch0[ i ];
+    
+    if( dd < min ) min = dd;
+    if( dd > max ) max = dd;
+    }
+
+for( unsigned int i = 0; i < sizech1; i++ )
+    {
+    double dd = pch1[ i ];
+    
+    if( dd < min ) min = dd;
+    if( dd > max ) max = dd;
+    }
+
+
+double scale = 1.0 / fabs( max );                           //work out what scale value will keep peak excursion to +/- 1.0
+if( fabs( min ) > fabs( max ) )
+    {
+    scale = 1.0 / fabs( min );
+    }
+
+if(verb) printf( "audio_formats::normalise_malloc() - min %f  max %f  scale %f\n", min, max, scale );
+
+for( unsigned int i = 0; i < sizech0; i++ )
+    {
+    pch0[ i ] = pch0[ i ] * scale * max_val;         		 //scale to requested max value
+    }
+
+for( unsigned int i = 0; i < sizech1; i++ )
+    {
+    pch1[ i ] = pch1[ i ] * scale * max_val;
+    }
+
+return 1;
+}
+
+
+
+
 
 
 
