@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024 BrerDawg
+Copyright (C) 2019-2026 BrerDawg, et. al.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License

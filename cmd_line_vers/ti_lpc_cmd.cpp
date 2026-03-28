@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024 BrerDawg
+Copyright (C) 2019-2026 BrerDawg, et. al.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,16 +18,39 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //ti_lpc_cmd.cpp
 
-//v1.01		31-jan-2024			//
+//-----v1.01 31-jan-2024 	//initial cmd line version, ported from GUI ti_lpc
+//-----v1.02 27-mar-2026 	//added: strbin= parameter for rendering raw binary LPC files
+//-----v1.03 27-mar-2026 	//added: frame_cnt >= 200 infinite loop guard for invalid LPC data
+//-----v1.04 27-mar-2026 	//added: swidth= parameter for 8-bit or 16-bit output sample width
+//-----v1.05 27-mar-2026 	//added: output= parameter for mono/stereo output selection
+//-----v1.06 27-mar-2026 	//added: ch= parameter for left/right/both channel audio placement
+//-----v1.07 27-mar-2026 	//added: auto-detect output format from file extension (.wav, .au, .aiff, .raw)
+//-----v1.08 27-mar-2026 	//changed: default srate from 48000 to 8000 Hz
+//-----v1.09 27-mar-2026 	//added: detect_audio_format_from_ext() helper function
+//-----v1.10 27-mar-2026 	//fixed: -help and --help were not working (ExtractParamVal_with_delimit returns 0 for empty values)
+//-----v1.11 27-mar-2026 	//added: USE_TMS5K_H compile-time option for compiled-in chip params from tms5k.h
+								//added: load_chip_params_from_tms5k() to load chip params when chip= has no file extension
+//-----v1.12 27-mar-2026 	//updated: version to v1.1.5, date to 2026-03-27
+								//updated: copyright to 'Copyright (C) 2019-2026 BrerDawg, et. al.'
+//-----v1.13 27-mar-2026 	//updated: show_usage() and ti_lpc_cmd_help.txt with all new parameters and examples
+//-----v1.13 27-mar-2026 	//added: input validation for str= and strhex= (character checking)
+								//added: strfile= parameter for reading decimal CSV LPC data from a text file
+								//added: strhexfile= parameter for reading hex CSV LPC data from a text file
+								//added: validate_str_lpc(), validate_strhex_lpc(), read_text_file_to_string() helper functions
+								//added: conflict checks for strhexfile= against all other string input params
 
 
 
 #include "ti_lpc_cmd.h"
 
+#ifdef USE_TMS5K_H
+#include "tms5k.h"
+#endif
+
 int exit_code;
 
 float srate_lpc = 8000;
-float srate_wav = 48000;
+float srate_wav = 8000;
 float lpc_srate = srate_lpc;											//srate the rom was encoded with
 float srate = srate_wav;
 float srate_au = srate_wav;
@@ -87,6 +110,107 @@ int snd_end_addr;
 uint64_t aud_pos = 0;
 
 bool verbose = 0;
+
+int swidth = 16;													//output sample width: 8 or 16 bits
+int output_channels = 2;											//1=mono, 2=stereo (default stereo)
+int audio_ch = -1;													//-1=both(default stereo), 0=left(ch0), 1=right(ch1)
+
+
+//validate a decimal LPC string: only digits 0-9, commas, colons (label prefix), and whitespace allowed
+bool validate_str_lpc( const string &ss, string &err )
+{
+for( size_t i = 0; i < ss.size(); i++ )
+	{
+	char c = ss[i];
+	if( (c >= '0' && c <= '9') || c == ',' || c == ':' || c == ' ' || c == '-' || c == '\t' || c == '\r' || c == '\n' ) continue;
+	err = "invalid character '";
+	err += c;
+	err += "' at position ";
+	err += to_string(i);
+	return 0;
+	}
+return 1;
+}
+
+//validate a hex LPC string: hex digits, commas, colons, 0x prefix, and whitespace allowed
+bool validate_strhex_lpc( const string &ss, string &err )
+{
+for( size_t i = 0; i < ss.size(); i++ )
+	{
+	char c = ss[i];
+	if( (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') ) continue;
+	if( c == ',' || c == ':' || c == ' ' || c == 'x' || c == 'X' || c == '\t' || c == '\r' || c == '\n' ) continue;
+	err = "invalid character '";
+	err += c;
+	err += "' at position ";
+	err += to_string(i);
+	return 0;
+	}
+return 1;
+}
+
+//read a text file and return its contents as a string (for strfile= and strhexfile=)
+bool read_text_file_to_string( const string &fname, string &out, string &err )
+{
+FILE *fp = fopen( fname.c_str(), "r" );
+if( !fp )
+	{
+	err = "failed to open file: '" + fname + "'";
+	return 0;
+	}
+
+fseek( fp, 0, SEEK_END );
+long flen = ftell( fp );
+fseek( fp, 0, SEEK_SET );
+
+if( flen <= 0 || flen > 1024 * 1024 )
+	{
+	err = "file size invalid or too large: " + to_string(flen) + " bytes (max 1MB)";
+	fclose( fp );
+	return 0;
+	}
+
+char *buf = (char*)malloc( flen + 1 );
+if( !buf )
+	{
+	err = "failed to allocate " + to_string(flen) + " bytes";
+	fclose( fp );
+	return 0;
+	}
+
+size_t rd = fread( buf, 1, flen, fp );
+fclose( fp );
+buf[rd] = 0;
+out = buf;
+free( buf );
+
+if( rd == 0 )
+	{
+	err = "file is empty: '" + fname + "'";
+	return 0;
+	}
+
+return 1;
+}
+
+
+//detect output audio format from file extension
+en_audio_formats detect_audio_format_from_ext( const string &fname )
+{
+string ext;
+size_t pos = fname.rfind( '.' );
+if( pos != string::npos ) ext = fname.substr( pos );
+
+//lowercase
+for( size_t i = 0; i < ext.size(); i++ ) ext[i] = tolower( ext[i] );
+
+if( ext == ".wav" ) return en_af_wav_pcm;
+if( ext == ".aiff" || ext == ".aif" ) return en_af_aiff;
+if( ext == ".au" || ext == ".snd" ) return en_af_sun;
+if( ext == ".raw" || ext == ".pcm" ) return en_af_raw_pcm;
+
+return en_af_wav_pcm;											//default to wav
+}
 
 
 int16_t buf[ cn_bufsz ];
@@ -1260,6 +1384,66 @@ return 1;
 
 
 
+
+#ifdef USE_TMS5K_H
+//load chip parameters from compiled-in tms5k.h structs (used when chip= has no file extension)
+bool load_chip_params_from_tms5k( string chip_name )
+{
+const tms5k::ChipParams* cp = tms5k::getChipParamsByName( chip_name.c_str() );
+
+if( !cp )
+	{
+	printf("load_chip_params_from_tms5k() - unknown chip name: '%s'\n", chip_name.c_str() );
+	return 0;
+	}
+
+bool vb = verbose;
+
+if(vb)printf("load_chip_params_from_tms5k() - loading compiled-in params for '%s'\n", cp->name );
+
+//chirp
+for( int i = 0; i < cp->chirp_size && i < CHIRP_SIZE_0280; i++ )
+	{
+	chirp_0280[i] = cp->chirp[i];
+	}
+ichirp_size = cp->chirp_size;
+
+//energy
+for( int i = 0; i < cp->energy_size && i < 16; i++ )
+	{
+	tmsEnergy_0280[i] = cp->energy[i];
+	}
+
+//pitch
+for( int i = 0; i < cp->pitch_count && i < 64; i++ )
+	{
+	tmsPeriod_0280[i] = cp->pitch[i];
+	}
+
+if( cp->pitch_count == 64 )
+	bperiod_6bits = 1;
+else
+	bperiod_6bits = 0;
+
+//k coefficients
+for( int i = 0; i < cp->k0_size && i < 32; i++ ) tms_k0_0280[i] = cp->k0[i];
+for( int i = 0; i < cp->k1_size && i < 32; i++ ) tms_k1_0280[i] = cp->k1[i];
+for( int i = 0; i < cp->k2_size && i < 16; i++ ) tms_k2_0280[i] = cp->k2[i];
+for( int i = 0; i < cp->k3_size && i < 16; i++ ) tms_k3_0280[i] = cp->k3[i];
+for( int i = 0; i < cp->k4_size && i < 16; i++ ) tms_k4_0280[i] = cp->k4[i];
+for( int i = 0; i < cp->k5_size && i < 16; i++ ) tms_k5_0280[i] = cp->k5[i];
+for( int i = 0; i < cp->k6_size && i < 16; i++ ) tms_k6_0280[i] = cp->k6[i];
+for( int i = 0; i < cp->k7_size && i < 8; i++ ) tms_k7_0280[i] = cp->k7[i];
+for( int i = 0; i < cp->k8_size && i < 8; i++ ) tms_k8_0280[i] = cp->k8[i];
+for( int i = 0; i < cp->k9_size && i < 8; i++ ) tms_k9_0280[i] = cp->k9[i];
+
+if(vb)printf("load_chip_params_from_tms5k() - loaded '%s' ok\n", cp->name );
+
+return 1;
+}
+#endif
+
+
 Talkie::Talkie() 
 {
 rev_rom = 1;
@@ -1516,8 +1700,9 @@ int phs2 = 0;			//0->7, sub multiple as driven by phs1, interpolation is control
 saf.encoding = 3;
 saf.offset = 0;
 saf.format = en_af_wav_pcm;
-saf.channels = 1;
+saf.channels = output_channels;
 saf.srate = 8000;
+saf.bits_per_sample = swidth;
 
 //af.load( "", "zzcorrect0_48000.wav", 32768, saf );
 
@@ -1747,7 +1932,14 @@ if(vb)printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!energy_idx == 0xf\n");
 	if(vb)printf("frame_cnt[%03d]: engy_idx: %d, engy: %d, period: %d, rpt: %d, ending_cnt: %d\n", frame_cnt, energy_idx, tgt_energy, tgt_period, repeat, ending_cnt );
 
 	if(!vb)printf("frame_cnt[%03d]\r", frame_cnt);
-	
+
+	//check for infinite loop: if frame_cnt reaches 200 and all params are zero with ending_cnt == -1, the data is invalid
+	if( frame_cnt >= 200 && energy_idx == 0 && tgt_energy == 0 && tgt_period == 0 && repeat == 0 && ending_cnt == -1 )
+		{
+		printf("\nERROR: frame_cnt[%03d] - stuck in loop, data appears invalid (engy_idx: 0, engy: 0, period: 0, rpt: 0, ending_cnt: -1). Stopping.\n", frame_cnt );
+		break;
+		}
+
 	if( first ) 					//first frame?
 		{
 		from_energy = cur_energy = tgt_energy;
@@ -2255,8 +2447,16 @@ for( int i = 0; i < sr_out_sample_cont; i++ )
 
 	if( srate == srate_au )										//pc audio and .au srates the same?
 		{
-		af2.push_ch0( srconv_val * ( au_aud_gain / 100.0 ) );								//samples for .au audio file
-		af2.push_ch1( srconv_val * ( au_aud_gain / 100.0 ) );
+		float sval = srconv_val * ( au_aud_gain / 100.0 );
+		if( output_channels == 1 )
+			{
+			af2.push_ch0( sval );
+			}
+		else{
+			if( audio_ch == -1 ) { af2.push_ch0( sval ); af2.push_ch1( sval ); }			//audio on both channels
+			else if( audio_ch == 0 ) { af2.push_ch0( sval ); af2.push_ch1( 0 ); }			//audio on left, silence on right
+			else { af2.push_ch0( 0 ); af2.push_ch1( sval ); }								//silence on left, audio on right
+			}
 		}
 	
 	fgph_vx.push_back( i * 1.0 / srate );
@@ -2297,8 +2497,16 @@ printf("sample rate conversion .au file: 8KHz --> %d, samples: %f, nyquist: %f\n
 
 		cur_sample += srconv_ratio;
 
-		af2.push_ch0( srconv_val * ( au_aud_gain / 100.0 ) );
-		af2.push_ch1( srconv_val * ( au_aud_gain / 100.0 ) );
+		float sval = srconv_val * ( au_aud_gain / 100.0 );
+		if( output_channels == 1 )
+			{
+			af2.push_ch0( sval );
+			}
+		else{
+			if( audio_ch == -1 ) { af2.push_ch0( sval ); af2.push_ch1( sval ); }
+			else if( audio_ch == 0 ) { af2.push_ch0( sval ); af2.push_ch1( 0 ); }
+			else { af2.push_ch0( 0 ); af2.push_ch1( sval ); }
+			}
 		if( !(i%1000) ) printf(".");
 		}
 	}
@@ -2309,13 +2517,16 @@ printf("\n");
 //printf("\nnyquist: %f, fir_wndw: %d\n", nyquist, fir_wndw );
 saf.encoding = 3;
 saf.offset = 0;
-saf.format = en_af_sun;
-saf.channels = 2;
+saf.channels = output_channels;
 saf.srate = srate_au;
+saf.bits_per_sample = swidth;
 
 //s1 = fi_au_fname->value();											//ti_lpc_cmd mod
 s1 = fname_au;															//ti_lpc_cmd mod
-af2.save_malloc( "", s1, 32767, saf );
+saf.format = detect_audio_format_from_ext( s1 );
+
+int peak_val = ( swidth == 8 ) ? 127 : 32767;
+af2.save_malloc( "", s1, peak_val, saf );
 
 
 //update_gphs();														//ti_lpc_cmd mod
@@ -2366,7 +2577,7 @@ phrase_cnt++;
 saf.encoding = 3;
 saf.offset = 0;
 saf.format = en_af_sun;
-saf.channels = 2;
+saf.channels = output_channels;
 saf.srate = lpc_srate;
 
 //af.save_malloc( "", "zz_cummulative.au", 32767, saf );				//ti_lpc_cmd mod
@@ -3086,11 +3297,14 @@ return 1;
 
 void show_usage()
 {
-printf("Texas Instruments LPC Voice Synthesizer Decoder (e.g: Speak and Spell) v1.01\n");
+printf("Texas Instruments LPC Voice Synthesizer Decoder (e.g: Speak and Spell) v1.1.5\n");
+printf("Copyright (C) 2019-2026 BrerDawg, et. al.\n");
 printf("\n");
-printf("Minimal parameter checks are performed, params are delimited by spaces, therefore, do not use spaces in filenames or strings on the command line.\n");
+printf("Minimal parameter checks are performed, params are delimited by spaces,\n");
+printf("therefore, do not use spaces in filenames or strings on the command line.\n");
 printf("\n");
-printf("Anything before a colon is ignored when strings are rendered, this allows a convenient name to be at head of each string.\n");
+printf("Anything before a colon is ignored when strings are rendered, this allows a\n");
+printf("convenient name to be at head of each string.\n");
 printf("\n");
 printf("Some commands use default values if none are specified.\n");
 printf("\n");
@@ -3100,72 +3314,169 @@ printf("A hex string file is generated after render of audio, named: 'zzzlast_ut
 printf("\n");
 printf("Ubuntu users could add this to end of command to hear audio: && aplay zzzout.wav\n");
 printf("\n");
+printf("\n");
+printf("Parameters:\n");
+printf("-----------\n");
+printf("\n");
+printf("  mode=         Operating mode. Required. Values:\n");
+printf("                  render           - render LPC data to audio file\n");
+printf("                  romlist          - dump list of words found in rom\n");
+printf("                  rendaddrfileline - render rom addr from file at line index\n");
+printf("                  rendaddrfileseq  - render rom addr from file sequentially\n");
+printf("                  rendstrfileline  - render hex string from file at line index\n");
+printf("                  rendstrfileseq   - render hex string from file sequentially\n");
+printf("                  cleanbrace       - clean file keeping only content within braces\n");
+printf("                  cleanquote       - clean file keeping only content within quotes\n");
+printf("\n");
+printf("  chip=         Chip definition file (e.g: tms5100.txt, tms5110.txt, tms5200.txt, tms5220.txt).\n");
+printf("                If compiled with USE_TMS5K_H, a chip name without extension can be used\n");
+printf("                to load compiled-in params (e.g: chip=tms5220).\n");
+printf("\n");
+printf("  LPC data input (use only one at a time, mutually exclusive):\n");
+printf("  str=          Decimal comma-separated LPC byte string (e.g: str=45,36,126,14,3,255)\n");
+printf("                Values must be 0-255. Input is validated for invalid characters.\n");
+printf("  strhex=       Hex comma-separated LPC byte string (e.g: strhex=A5,4F,7A,D3)\n");
+printf("                Supports optional 0x prefix. Input is validated for invalid characters.\n");
+printf("  strfile=      Text file containing decimal comma-separated LPC bytes (e.g: strfile=data.txt)\n");
+printf("                File content is the same format as str= (e.g: 165,79,122,211,60,90)\n");
+printf("                File is read, validated, and rendered as decimal data.\n");
+printf("  strhexfile=   Text file containing hex comma-separated LPC bytes (e.g: strhexfile=data_hex.txt)\n");
+printf("                File content is the same format as strhex= (e.g: A5,4F,7A,D3 or 0xA5,0x4F)\n");
+printf("                Trailing commas are acceptable. File max size is 1MB.\n");
+printf("  strbin=       Binary LPC file path (e.g: strbin=0220_Affirmative.lpc)\n");
+printf("                File is read as raw bytes and passed directly to the LPC decoder.\n");
+printf("  addr=         ROM hex address to render (requires rom0=)\n");
+printf("\n");
+printf("  rom0=         Primary VSM ROM file\n");
+printf("  rom1=         Secondary VSM ROM file (requires rom0=)\n");
+printf("\n");
+printf("  wav=          Output audio filename (default: zzzout.wav).\n");
+printf("                Format is auto-detected from extension: .wav, .au, .aiff, .raw\n");
+printf("  srate=        Output sample rate in Hz (default: 8000, range: 4000-192000)\n");
+printf("  swidth=       Output sample width in bits (default: 16, values: 8 or 16)\n");
+printf("  output=       Output channel mode (default: st). Values:\n");
+printf("                  st or stereo  - stereo output (2 channels)\n");
+printf("                  mo or mono    - mono output (1 channel)\n");
+printf("  ch=           Audio channel placement for stereo output (default: both). Values:\n");
+printf("                  left, l, 0    - audio on left channel, silence on right\n");
+printf("                  right, r, 1   - audio on right channel, silence on left\n");
+printf("                If not specified with stereo output, audio goes to both channels.\n");
+printf("                Ignored for mono output.\n");
+printf("\n");
+printf("  gain=         Audio gain percentage (default: 75, range: 0-300)\n");
+printf("  filt=         Lattice filter (default: on). Set filt=off to disable.\n");
+printf("  verb=         Verbose output. Set verb=on to enable.\n");
+printf("\n");
+printf("  fnamein=      Input filename for file-based modes\n");
+printf("  fnameout=     Output filename for romlist mode (default: zzzaddr_list.txt)\n");
+printf("  line=         Zero-based line index for file-based render modes\n");
+printf("  step=         Step direction/amount for sequential file-based modes (default: 1)\n");
+printf("\n");
+printf("\n");
 printf("Invocation Examples:\n");
+printf("--------------------\n");
 printf("\n");
 printf("ti_lpc_cmd -help\n");
 printf("ti_lpc_cmd --help\n");
 printf("\n");
-printf("ti_lpc_cmd mode=romlist rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnameout=zzzaddr_list.txt			//dump list of words found in rom to text file (default fname is zzzaddr_list.txt), this list can be wrong for many roms as their organisation is unknown\n");
-printf("																									//dump formatted as  'address' 'word'   like so:            6a8d isle\n");
-printf("																									//see 'mode=rendaddrfileseq' option for sequential playing of this file\n");
+printf("--- ROM listing ---\n");
 printf("\n");
-printf("ti_lpc_cmd mode=romlist rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnameout=zzzaddr_list.txt verb=on 	//with verbose enabled for detailed output\n");
+printf("ti_lpc_cmd mode=romlist rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnameout=zzzaddr_list.txt\n");
+printf("    //dump list of words found in rom to text file, formatted as 'address' 'word' (e.g: 6a8d isle)\n");
 printf("\n");
+printf("ti_lpc_cmd mode=romlist rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnameout=zzzaddr_list.txt verb=on\n");
+printf("    //with verbose enabled for detailed output\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm wav=zzzout.wav gain=75 addr=12a1	 	//render using chip def t'ms5100.txt' and rom hex address 12a1 to audio file with gain of 75% (gain default is 75, and limits are between 0-->300)\n");
+printf("--- Render from ROM address ---\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm addr=1600	 				//render using rom hex address 1600 to default audio file named 'zzzout.wav'\n");
+printf("ti_lpc_cmd mode=render chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm wav=zzzout.wav gain=75 addr=12a1\n");
+printf("    //render rom hex address 12a1 with gain of 75%%\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm srate=8000 addr=1198	 	//render and rom hex address 1198 to audio file with samplerate of 8KHz (srate default is 48KHz, limits are between 4000-->192000)\n");
+printf("ti_lpc_cmd mode=render chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm addr=1600\n");
+printf("    //render rom hex address 1600 to default 'zzzout.wav'\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5200.txt wav=zzzout.wav str=45,36,126,14,3,255...7,40 						//render decimal string to audio file (no roms req, strings must not have spaces)\n");
-printf("ti_lpc_cmd mode=render chip=tms5100.txt str=isle:45,36,126,14,3,255...12,255 						//render decimal string to audio file (str has word label prefixed before colon and is ignored)\n");
+printf("--- Render from binary LPC file ---\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5220.txt strhex=45,36,AE,D5,0x56,A7...,AE,D5 						//render hex string to audio file\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc\n");
+printf("    //render binary LPC file to stereo 16-bit 8kHz wav (default settings)\n");
 printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc output=mono\n");
+printf("    //render to mono wav\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5220.txt filt=off strhex=45,36,AE,D5,0x56,A7...03,DF 				//render hex string to audio file (without lattice filtering)\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc ch=left\n");
+printf("    //render to stereo with audio on left channel only, right channel silence\n");
 printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc ch=right\n");
+printf("    //render to stereo with audio on right channel only, left channel silence\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc srate=48000\n");
+printf("    //render upsampled to 48kHz stereo\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strbin=0220_Affirmative.lpc output=mono swidth=8\n");
+printf("    //render to 8-bit mono wav\n");
+printf("\n");
+printf("--- Render from decimal string ---\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5200.txt wav=zzzout.wav str=45,36,126,14,3,255...7,40\n");
+printf("    //render decimal string to audio file (no roms required, strings must not have spaces)\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5100.txt str=isle:45,36,126,14,3,255...12,255\n");
+printf("    //render decimal string (str has word label prefixed before colon, label is ignored)\n");
+printf("\n");
+printf("--- Render from hex string ---\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt strhex=45,36,AE,D5,0x56,A7...,AE,D5\n");
+printf("    //render hex string to audio file\n");
+printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt filt=off strhex=45,36,AE,D5,0x56,A7...03,DF\n");
+printf("    //render hex string without lattice filtering\n");
 printf("\n");
 printf("ti_lpc_cmd mode=render chip=tms5100.txt strhex=4D,E6,C8,C2,91,8F,BB,9C,72,89,98,84,35,7D,D5,12,D6,98,5A,FA,E2,C1,94,71,0F,B7,D9,8D,09,9F,61,66,B7,13,E3,D3,4D,BC,1F,05,46,9E,AB,65,AD,0E,86,5E,53,F5,2A,EB,BD,CB,F4,B8,9B,96,14,9F,4B,52,2D,C4,B5,2B,CF,74,8A,8B,62,11,1D,EB,D4,E4,CC,34,6B,D2,69,C5,85,9B,D6,A5,3B,CF,8E,BE,4C,E5,A6,CE,9B,6F,78,C9,6B,08,94,FB,FE,F2,2B,CF,D9,54,F7,B4,F4,00\n");
 printf("\n");
+printf("--- Render from text file (decimal) ---\n");
 printf("\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strfile=lpc_decimal.txt\n");
+printf("    //render LPC data from a text file containing comma-separated decimal values (0-255)\n");
+printf("    //file content example: 165,79,122,211,60,90,143,174,200,169\n");
 printf("\n");
+printf("--- Render from text file (hex) ---\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5100.txt str=isle:69,171,54,174,213,86,167,62,202,212,42,238,150,115,213,85,87,95,115,156,107,145,30,39,251,4,159,52,163,198,206,137,41,154,165,95,236,19,115,114,13,207,39,55,222,126,70,50,25,41,250,250,140,32,178,154,125,243,154,137,123,143,112,239,54,19,243,57,165,222,105,70,26,59,130,187,243,172,115,204,64,162,67,68,74,159,118,62,0,0,149,171,54,174,213,86,167,62,202,212,42,238,150,115,213,85,87,95,115,156,107,145,30,39,251,4,159,52,163,198,206,137,41,154,165,95,236,19,115,114,13,207\n");
+printf("ti_lpc_cmd mode=render chip=tms5220.txt wav=output.wav strhexfile=lpc_hex.txt\n");
+printf("    //render LPC data from a text file containing comma-separated hex values\n");
+printf("    //file content example: A5,4F,7A,D3,3C,5A,8F,AE,C8,A9\n");
+printf("    //also accepts 0x prefix: 0xA5,0x4F,0x7A,0xD3\n");
+printf("    //trailing commas are acceptable: A5,4F,7A,D3,\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5220.txt strhex=twenty:0x01,0x98,0xD1,0xC2,0x00,0xCD,0xA4,0x32,0x20,0x79,0x13,0x04,0x28,0xE7,0x92,0xDC,0x70,0xCC,0x5D,0xDB,0x76,0xF3,0xD2,0x32,0x0B,0x0B,0x5B,0xC3,0x2B,0xCD,0xD4,0xDD,0x23,0x35,0xAF,0x44,0xE1,0xF0,0xB0,0x6D,0x3C,0xA9,0xAD,0x3D,0x35,0x0E,0xF1,0x0C,0x8B,0x28,0xF7,0x34,0x01,0x68,0x22,0xCD,0x00,0xC7,0xA4,0x04,0xBB,0x32,0xD6,0xAC,0x56,0x9C,0xDC,0xCA,0x28,0x66,0x53,0x51,0x70,0x2B,0xA5,0xBC,0x0D,0x9A,0xC1,0xEB,0x14,0x73,0x37,0x29,0x19,0xAF,0x33,0x8C,0x3B,0xA7,0x24,0xBC,0x42,0xB0,0xB7,0x59,0x09,0x09,0x3C,0x96,0xE9,0xF4,0x58,0xFF,0x0F0x01,0x98,0xD1,0xC2,0x00,0xCD,0xA4,0x32,0x20,0x79,0x13,0x04,0x28,0xE7,0x92,0xDC,0x70,0xCC,0x5D,0xDB,0x76,0xF3,0xD2,0x32,0x0B,0x0B,0x5B,0xC3,0x2B,0xCD,0xD4,0xDD,0x23,0x35,0xAF,0x44,0xE1,0xF0,0xB0,0x6D,0x3C,0xA9,0xAD,0x3D,0x35,0x0E,0xF1,0x0C,0x8B,0x28,0xF7,0x34,0x01,0x68,0x22,0xCD,0x00,0xC7,0xA4,0x04,0xBB,0x32,0xD6,0xAC,0x56,0x9C,0xDC,0xCA,0x28,0x66,0x53,0x51,0x70,0x2B,0xA5,0xBC,0x0D,0x9A,0xC1,0xEB,0x14,0x73,0x37,0x29,0x19,0xAF,0x33,0x8C,0x3B,0xA7,0x24,0xBC,0x42,0xB0,0xB7,0x59,0x09,0x09,0x3C,0x96,0xE9,0xF4,0x58,0xFF,0x0F\n");
+printf("--- File cleanup ---\n");
 printf("\n");
+printf("ti_lpc_cmd mode=cleanbrace fnamein=Vocab_US_Large.cpp fnameout=Vocab_US_Large_str_clean.txt\n");
+printf("    //clean a file keeping only what's within braces (useful for extracting strings from C code)\n");
 printf("\n");
+printf("ti_lpc_cmd mode=cleanquote fnamein=a_quote_hex_string_file.txt fnameout=a_hex_string_file.txt\n");
+printf("    //clean a file keeping only what's within quotes\n");
 printf("\n");
-printf("ti_lpc_cmd mode=render chip=tms5220.txt strhex=afternoon:0xC7,0xCE,0xCE,0x3A,0xCB,0x58,0x1F,0x3B,0x07,0x9D,0x28,0x71,0xB4,0xAC,0x9C,0x74,0x5A,0x42,0x55,0x33,0xB2,0x93,0x0A,0x09,0xD4,0xC5,0x9A,0xD6,0x44,0x45,0xE3,0x38,0x60,0x9A,0x32,0x05,0xF4,0x18,0x01,0x09,0xD8,0xA9,0xC2,0x00,0x5E,0xCA,0x24,0xD5,0x5B,0x9D,0x4A,0x95,0xEA,0x34,0xEE,0x63,0x92,0x5C,0x4D,0xD0,0xA4,0xEE,0x58,0x0C,0xB9,0x4D,0xCD,0x42,0xA2,0x3A,0x24,0x37,0x25,0x8A,0xA8,0x8E,0xA0,0x53,0xE4,0x28,0x23,0x26,0x13,0x72,0x91,0xA2,0x76,0xBB,0x72,0x38,0x45,0x0A,0x46,0x63,0xCA,0x69,0x27,0x39,0x58,0xB1,0x8D,0x60,0x1C,0x34,0x1B,0x34,0xC3,0x55,0x8E,0x73,0x45,0x2D,0x4F,0x4A,0x3A,0x26,0x10,0xA1,0xCA,0x2D,0xE9,0x98,0x24,0x0A,0x1E,0x6D,0x97,0x29,0xD2,0xCC,0x71,0xA2,0xDC,0x86,0xC8,0x12,0xA7,0x8E,0x08,0x85,0x22,0x8D,0x9C,0x43,0xA7,0x12,0xB2,0x2E,0x50,0x09,0xEF,0x51,0xC5,0xBA,0x28,0x58,0xAD,0xDB,0xE1,0xFF,0x030xC7,0xCE,0xCE,0x3A,0xCB,0x58,0x1F,0x3B,0x07,0x9D,0x28,0x71,0xB4,0xAC,0x9C,0x74,0x5A,0x42,0x55,0x33,0xB2,0x93,0x0A,0x09,0xD4,0xC5,0x9A,0xD6,0x44,0x45,0xE3,0x38,0x60,0x9A,0x32,0x05,0xF4,0x18,0x01,0x09,0xD8,0xA9,0xC2,0x00,0x5E,0xCA,0x24,0xD5,0x5B,0x9D,0x4A,0x95,0xEA,0x34,0xEE,0x63,0x92,0x5C,0x4D,0xD0,0xA4,0xEE,0x58,0x0C,0xB9,0x4D,0xCD,0x42,0xA2,0x3A,0x24,0x37,0x25,0x8A,0xA8,0x8E,0xA0,0x53,0xE4,0x28,0x23,0x26,0x13,0x72,0x91,0xA2,0x76,0xBB,0x72,0x38,0x45,0x0A,0x46,0x63,0xCA,0x69,0x27,0x39,0x58,0xB1,0x8D,0x60,0x1C,0x34,0x1B,0x34,0xC3,0x55,0x8E,0x73,0x45,0x2D,0x4F,0x4A,0x3A,0x26,0x10,0xA1,0xCA,0x2D,0xE9,0x98,0x24,0x0A,0x1E,0x6D,0x97,0x29,0xD2,0xCC,0x71,0xA2,0xDC,0x86,0xC8,0x12,0xA7,0x8E,0x08,0x85,0x22,0x8D,0x9C,0x43,0xA7,0x12,0xB2,0x2E,0x50,0x09,0xEF,0x51,0xC5,0xBA,0x28,0x58,0xAD,0xDB,0xE1,0xFF,0x03.0xC7,0xCE,0xCE,0x3A,0xCB,0x58,0x1F,0x3B,0x07,0x9D,0x28,0x71,0xB4,0xAC,0x9C,0x74,0x5A,0x42,0x55,0x33,0xB2,0x93,0x0A,0x09,0xD4,0xC5,0x9A,0xD6,0x44,0x45,0xE3,0x38,0x60,0x9A,0x32,0x05,0xF4,0x18,0x01,0x09,0xD8,0xA9,0xC2,0x00,0x5E,0xCA,0x24,0xD5,0x5B,0x9D,0x4A,0x95,0xEA,0x34,0xEE,0x63,0x92,0x5C,0x4D,0xD0,0xA4,0xEE,0x58,0x0C,0xB9,0x4D,0xCD,0x42,0xA2,0x3A,0x24,0x37,0x25,0x8A,0xA8,0x8E,0xA0,0x53,0xE4,0x28,0x23,0x26,0x13,0x72,0x91,0xA2,0x76,0xBB,0x72,0x38,0x45,0x0A,0x46,0x63,0xCA,0x69,0x27,0x39,0x58,0xB1,0x8D,0x60,0x1C,0x34,0x1B,0x34,0xC3,0x55,0x8E,0x73,0x45,0x2D,0x4F,0x4A,0x3A,0x26,0x10,0xA1,0xCA,0x2D,0xE9,0x98,0x24,0x0A,0x1E,0x6D,0x97,0x29,0xD2,0xCC,0x71,0xA2,0xDC,0x86,0xC8,0x12,0xA7,0x8E,0x08,0x85,0x22,0x8D,0x9C,0x43,0xA7,0x12,0xB2,0x2E,0x50,0x09,0xEF,0x51,0xC5,0xBA,0x28,0x58,0xAD,0xDB,0xE1,0xFF,0x03\n");
+printf("--- Sequential file-based rendering (ROM addresses) ---\n");
 printf("\n");
+printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt line=0\n");
+printf("    //render rom addr from file at line 0 (stores next index in 'zzzline_index.txt')\n");
 printf("\n");
-printf("ti_lpc_cmd mode=cleanbrace fnamein=Vocab_US_Large.cpp fnameout=Vocab_US_Large_str_clean.txt				//clean a file keeping only what's within braces, useful for extracing strings embeded in c code such as found in Talkie prj on github\n");
+printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt\n");
+printf("    //render next rom addr using index from 'zzzline_index.txt', auto-increments\n");
 printf("\n");
-printf("ti_lpc_cmd mode=cleanquote fnamein=a_quote_hex_string_file.txt fnameout=a_hex_string_file.txt			//clean a file keeping only what's within quotes\n");
+printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt step=-2\n");
+printf("    //step backward by 2 lines\n");
 printf("\n");
+printf("--- Sequential file-based rendering (hex strings) ---\n");
 printf("\n");
+printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt line=0\n");
+printf("    //render hex string from file at line 0\n");
 printf("\n");
+printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt\n");
+printf("    //render next hex string, auto-increments\n");
 printf("\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt line=0	 		//render rom addr (from spec fnamein) using spec line index (will store line index incremented by 1 in 'zzzline_index.txt'), zero based index, so 0 is the first line in file, see also 'mode=romlist' option\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt	 				//render rom addr (from spec fnamein) using a line index from file 'zzzline_index.txt', will incremented this index and store back to same 'zzzline_index.txt', useful to sequentially progress though a long list of addresses in a file\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendaddrfileseq chip=tms5100.txt rom0=tmc0351n2l.vsm rom1=tmc0352n2l.vsm fnamein=zzzaddr_list.txt step=-2	 		//render rom addr (from spec fnamein) using a line index from file 'zzzline_index.txt', will decremented this index twice and store back to same 'zzzline_index.txt', useful to sequentially regress though a long list of addresses in a file\n");
-printf("\n");
-printf("\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt line=0	 			//render hex string(from spec fnamein) at line index (will store line index incremented by 1 in 'zzzline_index.txt'), zero based index, so 0 is the first line in file\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt	 				//render hex string(from spec fnamein) using a line index from file 'zzzline_index.txt', will incremented this index and store back to same 'zzzline_index.txt', useful to sequentially progress though a long list of string in a file\n");
-printf("\n");
-printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt step=-3	 		//render hex string(from spec fnamein) using a line index from file 'zzzline_index.txt', will decremented this index trice and store back to same 'zzzline_index.txt', useful to sequentially regress though a long list of string in a file\n");
-printf("\n");
-}	
-
-
+printf("ti_lpc_cmd mode=rendstrfileseq chip=tms5220.txt fnamein=Vocab_US_Large_str_clean.txt step=-3\n");
+printf("    //step backward by 3 lines\n");
+}
 
 
 void usage_help_c_string_generator( string fname_in, string fname_write )
@@ -3220,7 +3531,7 @@ if( !m1.writefile( fname_write ) )
 
 int main(int argc, char **argv)
 {
-string s1, st, sequ, ss, str_lpc, strhex_lpc, slist;
+string s1, st, sequ, ss, str_lpc, strhex_lpc, strbin_lpc, strfile_lpc, strhexfile_lpc, slist;
 mystr m1;
 
 //usage_help_c_string_generator( "ti_lpc_cmd_help.txt", "zzzusage.txt" );
@@ -3239,6 +3550,8 @@ bool param_addr = 0;
 bool param_str = 0;
 bool param_strhex = 0;
 bool param_strfile = 0;
+bool param_strbin = 0;
+bool param_strhexfile = 0;
 bool param_fnamein0 = 0;
 bool param_lineidx = 0;
 
@@ -3281,13 +3594,7 @@ int iv;
 unsigned int ui;
 
 
-if( m1.ExtractParamVal_with_delimit( "-help", ",", sequ ) )
-	{
-	show_usage();
-	goto do_exit;
-	}
-
-if( m1.ExtractParamVal_with_delimit( "--help", ",", sequ ) )
+if( st.find( "--help" ) != string::npos || st.find( "-help" ) != string::npos )
 	{
 	show_usage();
 	goto do_exit;
@@ -3426,12 +3733,26 @@ if( m1.ExtractParamVal_with_delimit( "strhex=", ".", sequ ) )
 	if(vb)printf( "strhex='%s'\n", sequ.c_str() );
 	}
 
-//if( m1.ExtractParamVal_with_delimit( "strfile=", ",", sequ ) )
-//	{
-//	param_strfile = 1;
-//	strfile_lpc = sequ;
-//	if(vb)printf( "strfile='%s'\n", sequ.c_str() );
-//	}
+if( m1.ExtractParamVal_with_delimit( "strfile=", ",", sequ ) )
+	{
+	param_strfile = 1;
+	strfile_lpc = sequ;
+	if(vb)printf( "strfile='%s'\n", sequ.c_str() );
+	}
+
+if( m1.ExtractParamVal_with_delimit( "strhexfile=", ",", sequ ) )
+	{
+	param_strhexfile = 1;
+	strhexfile_lpc = sequ;
+	if(vb)printf( "strhexfile='%s'\n", sequ.c_str() );
+	}
+
+if( m1.ExtractParamVal_with_delimit( "strbin=", ",", sequ ) )
+	{
+	param_strbin = 1;
+	strbin_lpc = sequ;
+	if(vb)printf( "strbin='%s'\n", sequ.c_str() );
+	}
 
 
 
@@ -3495,6 +3816,69 @@ if( m1.ExtractParamVal_with_delimit( "srate=", ",", sequ ) )
 	if(vb)printf( "srate=%d\n", srate_user );
 	}
 
+if( m1.ExtractParamVal_with_delimit( "swidth=", ",", sequ ) )
+	{
+	sscanf( sequ.c_str(), "%d" , &iv );
+
+	if( iv == 8 ) swidth = 8;
+	else if( iv == 16 ) swidth = 16;
+	else{
+		printf( "WARNING: swidth=%d is not valid, must be 8 or 16, using default 16\n", iv );
+		swidth = 16;
+		}
+
+	if(vb)printf( "swidth=%d\n", swidth );
+	}
+
+if( m1.ExtractParamVal_with_delimit( "output=", ",", sequ ) )
+	{
+	if( sequ.compare( "mo" ) == 0 || sequ.compare( "mono" ) == 0 )
+		{
+		output_channels = 1;
+		}
+	else if( sequ.compare( "st" ) == 0 || sequ.compare( "stereo" ) == 0 )
+		{
+		output_channels = 2;
+		}
+	else{
+		printf( "WARNING: output=%s is not valid, must be mo/mono or st/stereo, using default stereo\n", sequ.c_str() );
+		output_channels = 2;
+		}
+
+	if(vb)printf( "output=%s (channels=%d)\n", sequ.c_str(), output_channels );
+	}
+
+if( m1.ExtractParamVal_with_delimit( "ch=", ",", sequ ) )
+	{
+	if( sequ.compare( "left" ) == 0 || sequ.compare( "l" ) == 0 || sequ.compare( "0" ) == 0 )
+		{
+		audio_ch = 0;
+		}
+	else if( sequ.compare( "right" ) == 0 || sequ.compare( "r" ) == 0 || sequ.compare( "1" ) == 0 )
+		{
+		audio_ch = 1;
+		}
+	else{
+		printf( "WARNING: ch=%s is not valid, must be left/l/0 or right/r/1, using default left\n", sequ.c_str() );
+		audio_ch = 0;
+		}
+
+	if(vb)printf( "ch=%s (audio_ch=%d)\n", sequ.c_str(), audio_ch );
+	}
+
+//if mono output requested, ch= is not applicable - audio always goes to ch0
+if( output_channels == 1 && audio_ch > 0 )
+	{
+	printf( "NOTE: ch= is ignored for mono output, audio goes to ch0\n" );
+	audio_ch = 0;
+	}
+
+//if mono output and no ch= was specified, set audio_ch to 0
+if( output_channels == 1 && audio_ch == -1 )
+	{
+	audio_ch = 0;
+	}
+
 
 if( ( param_rom0 == 0 ) && ( param_rom1 == 1 ) )
 	{
@@ -3505,12 +3889,34 @@ if( ( param_rom0 == 0 ) && ( param_rom1 == 1 ) )
 
 
 
+#ifdef USE_TMS5K_H
+//if chip= has no file extension, use compiled-in tms5k.h values
+if( fname_tms_chip.find('.') == string::npos )
+	{
+	if( !load_chip_params_from_tms5k( fname_tms_chip ) )
+		{
+		printf( "ERROR: failed to load compiled-in chip params for: '%s'\n", fname_tms_chip.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	}
+else
+	{
+	if( !load_chip_params( fname_tms_chip ) )
+		{
+		printf( "ERROR: failed to read tms chip def file: '%s'\n", fname_tms_chip.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	}
+#else
 if( !load_chip_params( fname_tms_chip ) )
 	{
 	printf( "ERROR: failed to read tms chip def file: '%s'\n", fname_tms_chip.c_str() );
 	exit_code = 1;
 	goto do_exit;
 	}
+#endif
 
 
 if( param_rom0 )
@@ -3886,6 +4292,85 @@ if( ( mode_user == en_mu_rendstrfileseq ) )
 
 
 
+
+//---- input validation for string parameters ----
+if( param_str )
+	{
+	string verr;
+	if( !validate_str_lpc( str_lpc, verr ) )
+		{
+		printf( "ERROR: str= contains invalid data: %s\n", verr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	if( str_lpc.empty() )
+		{
+		printf( "ERROR: str= is empty\n" );
+		exit_code = 1;
+		goto do_exit;
+		}
+	}
+
+if( param_strhex )
+	{
+	string verr;
+	if( !validate_strhex_lpc( strhex_lpc, verr ) )
+		{
+		printf( "ERROR: strhex= contains invalid data: %s\n", verr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	if( strhex_lpc.empty() )
+		{
+		printf( "ERROR: strhex= is empty\n" );
+		exit_code = 1;
+		goto do_exit;
+		}
+	}
+
+if( param_strfile )
+	{
+	string file_content, ferr;
+	if( !read_text_file_to_string( strfile_lpc, file_content, ferr ) )
+		{
+		printf( "ERROR: strfile= %s\n", ferr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	string verr;
+	if( !validate_str_lpc( file_content, verr ) )
+		{
+		printf( "ERROR: strfile= file content contains invalid data: %s\n", verr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	//store file content as the str to render
+	str_lpc = file_content;
+	if(vb)printf( "strfile: loaded %zu bytes from '%s'\n", file_content.size(), strfile_lpc.c_str() );
+	}
+
+if( param_strhexfile )
+	{
+	string file_content, ferr;
+	if( !read_text_file_to_string( strhexfile_lpc, file_content, ferr ) )
+		{
+		printf( "ERROR: strhexfile= %s\n", ferr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	string verr;
+	if( !validate_strhex_lpc( file_content, verr ) )
+		{
+		printf( "ERROR: strhexfile= file content contains invalid data: %s\n", verr.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+	//store file content as the strhex to render
+	strhex_lpc = file_content;
+	if(vb)printf( "strhexfile: loaded %zu bytes from '%s'\n", file_content.size(), strhexfile_lpc.c_str() );
+	}
+
+
 if( ( param_addr == 1 ) && ( param_rom0 == 0 ) )
 	{
 	printf( "ERROR: can't specify an addr without specifying a rom.\n" );
@@ -3893,14 +4378,14 @@ if( ( param_addr == 1 ) && ( param_rom0 == 0 ) )
 	goto do_exit;
 	}
 
-if( ( param_addr == 1 ) && ( ( param_str == 1 ) || ( param_strhex == 1) || ( param_strfile == 1) ) )
+if( ( param_addr == 1 ) && ( ( param_str == 1 ) || ( param_strhex == 1) || ( param_strfile == 1) || ( param_strbin == 1) || ( param_strhexfile == 1) ) )
 	{
 	printf( "ERROR: can't specify an addr and a str.\n" );
 	exit_code = 1;
 	goto do_exit;
 	}
 
-if( ( param_addr == 0 ) && ( ( param_str == 0 ) && ( param_strhex == 0) && ( param_strfile == 0) ) )
+if( ( param_addr == 0 ) && ( ( param_str == 0 ) && ( param_strhex == 0) && ( param_strfile == 0) && ( param_strbin == 0) && ( param_strhexfile == 0) ) )
 	{
 	printf( "ERROR: need either an addr or a str specified.\n" );
 	exit_code = 1;
@@ -3928,6 +4413,20 @@ if( ( param_strhex == 1 ) && ( param_strfile == 1) )
 	goto do_exit;
 	}
 
+if( ( param_strbin == 1 ) && ( ( param_str == 1 ) || ( param_strhex == 1) || ( param_strfile == 1) || ( param_strhexfile == 1) ) )
+	{
+	printf( "ERROR: can't specify strbin with str, strhex, strfile, or strhexfile.\n" );
+	exit_code = 1;
+	goto do_exit;
+	}
+
+if( ( param_strhexfile == 1 ) && ( ( param_str == 1 ) || ( param_strhex == 1) || ( param_strfile == 1) ) )
+	{
+	printf( "ERROR: can\'t specify strhexfile with str, strhex, or strfile.\n" );
+	exit_code = 1;
+	goto do_exit;
+	}
+
 
 
 
@@ -3937,6 +4436,58 @@ if( ( param_strhex == 1 ) && ( param_strfile == 1) )
 
 
 
+
+if( param_strbin )
+	{
+	//read raw binary LPC data from file and render it
+	bool vb = verbose;
+	FILE *fp = fopen( strbin_lpc.c_str(), "rb" );
+	if( !fp )
+		{
+		printf( "ERROR: failed to open strbin file: '%s'\n", strbin_lpc.c_str() );
+		exit_code = 1;
+		goto do_exit;
+		}
+
+	fseek( fp, 0, SEEK_END );
+	long flen = ftell( fp );
+	fseek( fp, 0, SEEK_SET );
+
+	if( flen <= 0 || flen > rom_size_max )
+		{
+		printf( "ERROR: strbin file size invalid: %ld (max %d)\n", flen, rom_size_max );
+		fclose( fp );
+		exit_code = 1;
+		goto do_exit;
+		}
+
+	uint8_t *binbuf = (uint8_t*)malloc( flen );
+	if( !binbuf )
+		{
+		printf( "ERROR: failed to allocate %ld bytes for strbin\n", flen );
+		fclose( fp );
+		exit_code = 1;
+		goto do_exit;
+		}
+
+	size_t rd = fread( binbuf, 1, flen, fp );
+	fclose( fp );
+
+	if( (long)rd != flen )
+		{
+		printf( "ERROR: strbin read %zu of %ld bytes\n", rd, flen );
+		free( binbuf );
+		exit_code = 1;
+		goto do_exit;
+		}
+
+	if(vb) printf( "strbin: read %ld bytes from '%s'\n", flen, strbin_lpc.c_str() );
+
+	talk.say_tmc0580( binbuf, 0 );
+
+	free( binbuf );
+	goto do_exit;
+	}
 
 
 if( param_str )
@@ -3951,6 +4502,12 @@ if( param_strhex )
 
 if( param_strfile )
 	{
+	ss = str_lpc;		//file content was loaded into str_lpc during validation
+	}
+
+if( param_strhexfile )
+	{
+	ss = strhex_lpc;	//file content was loaded into strhex_lpc during validation
 	}
 
 if( param_addr )
@@ -3972,6 +4529,16 @@ if( param_str )
 if( param_strhex )
 	{
 	say_lpc_str( ss, 0 );
+	}
+
+if( param_strfile )
+	{
+	say_lpc_str( ss, 1 );		//decimal
+	}
+
+if( param_strhexfile )
+	{
+	say_lpc_str( ss, 0 );		//hex
 	}
 
 
