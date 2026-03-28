@@ -134,6 +134,7 @@ extern void say_lpc_str( string ss );
 extern void say_lpc_bytes( uint8_t *buf, int cnt );
 extern bool bperiod_6bits;
 extern Fl_Value_Slider *fvs_smples_frame;
+extern Fl_Value_Slider *fvs_glottal_period;
 
 void cb_fi_lpc_chirp( Fl_Widget *w, void *v );
 void cb_bt_tms5100_actual();
@@ -157,6 +158,7 @@ void cb_bt_hex_byte_text_file( Fl_Widget *w, void *v );
 void cb_bt_tms_code_tables_text_file( Fl_Widget *w, void *v );
 void cb_bt_sanitise_dlg_actual();										//v1.09
 extern void cb_fvs_smples_frame(Fl_Widget *w, void *v);
+extern void cb_fvs_glottal_period(Fl_Widget *w, void *v);
 
 extern bool select_au_file();
 extern bool b_whisper;													//v1.09

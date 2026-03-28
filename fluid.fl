@@ -35,8 +35,8 @@ decl {string au_fname;} {public local
 Function {main_window()} {open
 } {
   Fl_Window {} {
-    label ti_lpc_app open
-    xywh {814 59 990 970} type Double labelsize 11 align 8 resizable visible
+    label ti_lpc_app open selected
+    xywh {517 66 990 970} type Double labelsize 11 align 8 resizable visible
   } {
     Fl_Menu_Bar meMain {open
       xywh {0 0 990 20}
@@ -64,36 +64,36 @@ Function {main_window()} {open
     Fl_Value_Slider fvs_aud_gain {
       label gain
       callback cb_fvs_aud_gain
-      tooltip {adj audio level to sound hardware} xywh {940 391 25 94} labelsize 9 minimum 300 maximum 0 textsize 7
+      tooltip {adj audio level to sound hardware} xywh {940 454 25 94} labelsize 9 minimum 300 maximum 0 textsize 7
     }
     Fl_Text_Editor te_romaddr {
       label { }
-      tooltip {lpc addresses from rom (hex), hit Enter button to add to this, right click on an address to render audio} xywh {840 197 50 186}
+      tooltip {lpc addresses from rom (hex), hit Enter button to add to this, right click on an address to render audio} xywh {840 217 50 225}
       class mytexteditor2
     }
     Fl_Text_Editor te_lpcdata {
       label {LPC hex byte strings}
-      tooltip {lpc hex byte stream, one stream per line, right click on a line to render audio, anything before a colon is considered to be a label and is not sounded} xywh {245 203 595 180} labelsize 12 align 5
+      tooltip {lpc hex byte stream, one stream per line, right click on a line to render audio, anything before a colon is considered to be a label and is not sounded} xywh {245 223 595 219} labelsize 12 align 5
       class mytexteditor
     }
     Fl_Text_Editor te_wordlist {
       label {Speak Spell's Rom Contents (UK/USA)}
-      tooltip {word lists read from both roms (only valid for Speak & Spell rom pairs), right click on an address on the left to render audio} xywh {5 203 240 180} labelsize 12 align 5
+      tooltip {word lists read from both roms (only valid for Speak & Spell rom pairs), right click on an address on the left to render audio} xywh {5 223 240 219} labelsize 12 align 5
       class mytexteditor2
     }
     Fl_Text_Editor te_chirp {
       label {tms5xxx code table}
-      tooltip {enter hex byte (or decimal number) strings, one line per param, chirp wfm, energy, pitch count, pitch, 10 lattice iir filter(k0-->k9) lookup codes, click on buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx=0A,0xa,... for hex)} xywh {5 413 910 222} labelsize 13 align 5
+      tooltip {enter hex byte (or decimal number) strings, one line per param, chirp wfm, energy, pitch count, pitch, 10 lattice iir filter(k0-->k9) lookup codes, click on buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx=0A,0xa,... for hex)} xywh {5 471 910 222} labelsize 13 align 5
     }
     Fl_Input fi_romaddr {
       label {addr:}
       callback cb_fi_romaddr
-      tooltip {enter a rom address to utter (hex)} xywh {840 176 50 20} labelsize 11 when 10 textsize 11
+      tooltip {enter a rom address to utter (hex)} xywh {840 196 50 20} labelsize 11 when 10 textsize 11
     }
     Fl_Button {} {
       label AEdit
       callback cb_bt_open_audio_editor
-      tooltip {open audio editor, edit script/bat to start your favourite audio editor, see:  Linux: 'open_audio_editor.sh',   Win: 'open_audio_editor.bat'} xywh {937 95 50 20} labelsize 11
+      tooltip {open audio editor, edit script/bat to start your favourite audio editor, see:  Linux: 'open_audio_editor.sh',   Win: 'open_audio_editor.bat'} xywh {937 115 50 20} labelsize 11
     }
     Fl_Check_Button ck_interp {
       label interp
@@ -107,31 +107,31 @@ Function {main_window()} {open
     }
     Fl_Value_Input fi_srate {
       label {pc srate:}
-      callback cb_fi_srate selected
+      callback cb_fi_srate
       tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set, you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 when 8 textsize 11
     }
     Fl_Group fluid_gph1 {open
-      xywh {5 635 970 320}
+      xywh {5 696 970 270} box THIN_DOWN_BOX
     } {}
     Fl_Button {} {
       label {+}
       callback cb_bt_addr_plus
-      tooltip {go up one address and play} xywh {893 223 15 15} labelsize 8
+      tooltip {go up one address and play} xywh {893 273 15 15} labelsize 8
     }
     Fl_Button {} {
       label {-}
       callback cb_bt_addr_minus
-      tooltip {go down one address and play} xywh {893 238 15 15} labelsize 9
+      tooltip {go down one address and play} xywh {893 288 15 15} labelsize 9
     }
     Fl_Button {} {
       label {+4}
       callback cb_bt_addr_plus4
-      tooltip {go up 4 addresses and play} xywh {911 223 19 15} labelsize 8
+      tooltip {go up 4 addresses and play} xywh {911 273 19 15} labelsize 8
     }
     Fl_Button {} {
       label {-4}
       callback cb_bt_addr_minus4
-      tooltip {go down 4 addresses and play} xywh {911 238 19 15} labelsize 8
+      tooltip {go down 4 addresses and play} xywh {911 288 19 15} labelsize 8
     }
     Fl_Input fi_romfname1 {
       label {rom1:}
@@ -146,12 +146,12 @@ Function {main_window()} {open
     Fl_Input fi_lpc_hex {
       label {lpc hex:}
       callback cb_fi_lpc_hex
-      tooltip {lpc hex byte stream (from last rendering), click play on right to re-render audio} xywh {65 133 825 20} labelsize 11 when 1 textsize 11
+      tooltip {lpc hex byte stream (from last rendering), click play on right to re-render audio} xywh {65 153 825 20} labelsize 11 when 1 textsize 11
     }
     Fl_Button {} {
       label Play
       callback cb_bt_play_lpc_hex
-      tooltip {play lpc hex data} xywh {893 133 40 20} labelsize 11
+      tooltip {play lpc hex data} xywh {893 153 40 20} labelsize 11
     }
     Fl_Check_Button ck_pitch_6bits {
       label pitch6bits
@@ -161,183 +161,183 @@ Function {main_window()} {open
     Fl_Value_Input fi_srate_au {
       label {au srate:}
       callback cb_fi_srate_au
-      tooltip {sample rate to use when saving the .au audio file} xywh {725 96 58 19} labelsize 12 textsize 11
+      tooltip {sample rate to use when saving the .au audio file} xywh {725 116 58 19} labelsize 12 textsize 11
     }
     Fl_Value_Slider fvs_au_aud_gain {
       label {au file gain}
       callback cb_fvs_au_aud_gain
-      tooltip {set the audio gain when saving to audio file, 100 is unity} xywh {785 95 150 21} type Horizontal box UP_BOX labelsize 9 maximum 300 value 100 textsize 7
+      tooltip {set the audio gain when saving to audio file, 100 is unity} xywh {785 115 150 21} type Horizontal box UP_BOX labelsize 9 maximum 300 value 100 textsize 7
     }
     Fl_Input fi_au_fname {
       label {au fname:}
-      tooltip {enter .au filename to save audio into} xywh {66 96 560 20} labelsize 11 when 1 textsize 11
+      tooltip {enter .au filename to save audio into} xywh {66 116 560 20} labelsize 11 when 1 textsize 11
     }
     Fl_Button {} {
       label tms5100
       callback cb_bt_tms5100
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 509 67 22} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 577 67 22} labelsize 11
     }
     Fl_Button {} {
       label tms5220
       callback cb_bt_tms5220
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 587 65 24} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 655 65 24} labelsize 11
     }
     Fl_Button {} {
       label {+last}
       callback cb_bt_addr_plus_last
-      tooltip {add last rendered byte count to address and play, this does not work well for words that have text bytes before their lpc byte strings, it's not easy to discern between text bytes and lpc strings without a table of rom's organisation} xywh {954 238 33 15} labelsize 9
+      tooltip {add last rendered byte count to address and play, this does not work well for words that have text bytes before their lpc byte strings, it's not easy to discern between text bytes and lpc strings without a table of rom's organisation} xywh {954 288 33 15} labelsize 9
     }
     Fl_Button {} {
       label tms5200
       callback cb_bt_tms5200
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 561 65 23} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 629 65 23} labelsize 11
     }
     Fl_Input fi_lpc_decimal {
       label {lpc decml:}
       callback cb_fi_lpc_decimal
-      tooltip {lpc decimal number stream (from last rendering), click play on right to re-render audio} xywh {65 153 825 20} labelsize 11 when 1 textsize 11
+      tooltip {lpc decimal number stream (from last rendering), click play on right to re-render audio} xywh {65 173 825 20} labelsize 11 when 1 textsize 11
     }
     Fl_Button {} {
       label Play
       callback cb_bt_play_lpc_decimal
-      tooltip {play lpc decimal data} xywh {893 153 40 20} labelsize 11
+      tooltip {play lpc decimal data} xywh {893 173 40 20} labelsize 11
     }
     Fl_Button {} {
       label {B.File}
       callback cb_bt_play_lpc_file
-      tooltip {play lpc hex data from a binary file} xywh {935 133 40 20} labelsize 11
+      tooltip {play lpc hex data from a binary file} xywh {935 153 40 20} labelsize 11
     }
     Fl_Button {} {
       label Play
       callback cb_bt_addr_play
-      tooltip {play lpc at address} xywh {893 177 40 20} labelsize 11
+      tooltip {play lpc at address} xywh {893 197 40 20} labelsize 11
     }
     Fl_Button {} {
       label Enter
       callback cb_bt_addr_enter
-      tooltip {enter address in list} xywh {934 177 40 20} labelsize 11
+      tooltip {enter address in list} xywh {934 197 40 20} labelsize 11
     }
     Fl_Input fi_addr_step_delay {
       label {delay:}
       user_data 1
       callback cb_fi_addr_step_combo
-      tooltip {delay in secs between auto address stepping, e.g: 0.5} xywh {926 297 45 20} labelsize 11 when 10 textsize 11
+      tooltip {delay in secs between auto address stepping, e.g: 0.5} xywh {926 347 45 20} labelsize 11 when 10 textsize 11
     }
     Fl_Input fi_addr_step_delta {
       label {delta:}
       user_data 0
       callback cb_fi_addr_step_combo
-      tooltip {amount to auto address step by (decimal), e.g: 2    or   -1} xywh {926 318 45 20} labelsize 11 when 10 textsize 11
+      tooltip {amount to auto address step by (decimal), e.g: 2    or   -1} xywh {926 368 45 20} labelsize 11 when 10 textsize 11
     }
     Fl_Button {} {
       label Start
       user_data 0
       callback cb_bt_addr_step_combo
-      tooltip {start auto address stepping} xywh {893 342 36 17} labelsize 9
+      tooltip {start auto address stepping} xywh {893 392 36 17} labelsize 9
     }
     Fl_Button {} {
       label Stop
       user_data 1
       callback cb_bt_addr_step_combo
-      tooltip {stop auto address stepping} xywh {932 342 35 17} labelsize 9
+      tooltip {stop auto address stepping} xywh {932 392 35 17} labelsize 9
     }
     Fl_Input fi_addr_step_count {
       label {count:}
       user_data 2
       callback cb_fi_addr_step_combo
-      tooltip {count of the number of auto address steps attempted} xywh {932 361 45 20} labelsize 11 when 10 textsize 11
+      tooltip {count of the number of auto address steps attempted} xywh {932 411 45 20} labelsize 11 when 10 textsize 11
     }
     Fl_Box bx_addr_step_led {
-      xywh {970 345 12 12} box BORDER_BOX
+      xywh {970 395 12 12} box BORDER_BOX
     }
     Fl_Input fi_addr_snd_end {
       label {snd end:}
-      tooltip {approx end address reached in rom after speech was sounded (in hex), could be out by a few bytes, will show number of bytes parsed (a hex count) if sounding from a hex string, i.e. not from a rom address} xywh {941 200 46 20} labelsize 11 when 10 textsize 11
+      tooltip {approx end address reached in rom after speech was sounded (in hex), could be out by a few bytes, will show number of bytes parsed (a hex count) if sounding from a hex string, i.e. not from a rom address} xywh {941 220 46 20} labelsize 11 when 10 textsize 11
     }
     Fl_Button {} {
       label {-}
       user_data 0
       callback cb_bt_addr_dec_inc_val
-      tooltip {dec address by defined amount} xywh {893 258 15 15} labelsize 9
+      tooltip {dec address by defined amount} xywh {893 308 15 15} labelsize 9
     }
     Fl_Input fi_addr_dec_inc_val {
-      tooltip {enter a value to dec/inc address by (decimal)} xywh {911 255 44 20} labelsize 11 when 10 textsize 11 resizable
+      tooltip {enter a value to dec/inc address by (decimal)} xywh {911 305 44 20} labelsize 11 when 10 textsize 11 resizable
     }
     Fl_Button {} {
       label {+}
       user_data 1
       callback cb_bt_addr_dec_inc_val
-      tooltip {inc address by defined amount} xywh {958 258 15 15} labelsize 9
+      tooltip {inc address by defined amount} xywh {958 308 15 15} labelsize 9
     }
     Fl_Button {} {
       label {+8}
       callback cb_bt_addr_plus8
-      tooltip {go up 8 addresses and play} xywh {933 223 19 15} labelsize 8
+      tooltip {go up 8 addresses and play} xywh {933 273 19 15} labelsize 8
     }
     Fl_Button {} {
       label {-8}
       callback cb_bt_addr_minus8
-      tooltip {go down 8 addresses and play} xywh {933 238 19 15} labelsize 8
+      tooltip {go down 8 addresses and play} xywh {933 288 19 15} labelsize 8
     }
     Fl_Box {} {
       label {Auto Step}
-      tooltip {Address auto stepping, enter params and hit Start button} xywh {905 281 70 15} labelsize 9
+      tooltip {Address auto stepping, enter params and hit Start button} xywh {905 256 70 15} labelsize 9
     }
     Fl_Button {} {
       label {@<-}
       user_data 0
       callback cb_bt_addr_hist_prev_next
-      tooltip {previous address history} xywh {744 174 24 20} labelsize 8
+      tooltip {previous address history} xywh {744 194 24 20} labelsize 8
     }
     Fl_Button {} {
       label {@->}
       user_data 1
       callback cb_bt_addr_hist_prev_next
-      tooltip {next address history} xywh {771 174 24 20} labelsize 8
+      tooltip {next address history} xywh {771 194 24 20} labelsize 8
     }
     Fl_Box bx_addr_hist_label {
       label {addr history (????/????):}
-      tooltip {Address auto stepping, enter params and hit Start button} xywh {605 177 135 15} labelsize 11
+      tooltip {Address auto stepping, enter params and hit Start button} xywh {605 197 135 15} labelsize 11
     }
     Fl_Button {} {
       label tms5110
       callback cb_bt_tms5110
-      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 535 65 22} labelsize 11
+      tooltip {select TMS5xxx chip version and its specific codes for: chirp, engery, pitch and lattice iir filter coeffs} xywh {918 603 65 22} labelsize 11
     }
     Fl_Button {} {
       label Load
       user_data 0
       callback cb_bt_hex_byte_text_file
-      tooltip {load lpc hex byte strings from text file} xywh {377 182 45 20} labelsize 10
+      tooltip {load lpc hex byte strings from text file} xywh {377 202 45 20} labelsize 10
     }
     Fl_Button {} {
       label Save
       user_data 1
       callback cb_bt_hex_byte_text_file
-      tooltip {save lpc hex byte strings to text file} xywh {425 182 45 20} labelsize 10
+      tooltip {save lpc hex byte strings to text file} xywh {425 202 45 20} labelsize 10
     }
     Fl_Button {} {
       label Load
       user_data 0
       callback cb_bt_tms_code_tables_text_file
-      tooltip {load tms code table from text file} xywh {147 391 45 20} labelsize 10
+      tooltip {load tms code table from text file} xywh {147 449 45 20} labelsize 10
     }
     Fl_Button {} {
       label Save
       user_data 1
       callback cb_bt_tms_code_tables_text_file
-      tooltip {save tms code table to text file} xywh {195 391 45 20} labelsize 10
+      tooltip {save tms code table to text file} xywh {195 449 45 20} labelsize 10
     }
     Fl_Button {} {
       label Sel
       callback cb_bt_aufile_sel
-      tooltip {select .au audio file} xywh {628 96 35 20} labelsize 11
+      tooltip {select .au audio file} xywh {628 116 35 20} labelsize 11
     }
     Fl_Button {} {
       label {SanitiseDlg...}
       user_data 1
       callback cb_bt_sanitise_dlg
-      tooltip {opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup to strip c code symbols, useful if you obtained strings from other code projects} xywh {490 182 80 20} labelsize 10
+      tooltip {opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup to strip c code symbols, useful if you obtained strings from other code projects} xywh {490 202 80 20} labelsize 10
     }
     Fl_Check_Button ck_whisper {
       label whisper
@@ -348,6 +348,11 @@ Function {main_window()} {open
       label {samples/frame}
       callback cb_fvs_smples_frame
       private tooltip {samples per frame, 1.0 is normal, higher slows voicing allowing frame changes to be heard, a frame is 25mS,  8KHz * 0.025 = 200 samples/frame} xywh {585 74 335 16} type Horizontal box UP_BOX labelsize 9 align 8 when 4 minimum 0.25 maximum 20 value 1 textsize 7
+    }
+    Fl_Value_Slider fvs_glottal_period {
+      label {chirp period factor}
+      callback cb_fvs_glottal_period
+      tooltip {glottal chirp period factor, 1.0 is normal, a lower factor increase the number of chirps in a frame and therefore increase pitch} xywh {585 94 315 16} type Horizontal box UP_BOX labelsize 9 align 8 when 4 minimum 0.25 maximum 3 value 1 textsize 7
     }
   }
   code {tb_lpcdata = new Fl_Text_Buffer;

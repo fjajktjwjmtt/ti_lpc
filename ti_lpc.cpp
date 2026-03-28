@@ -31,6 +31,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 								//added 'sanitise' button, refer 'cb_bt_sanitise_dlg_actual()'
 								//added 'whisper' checkbox, refer 'b_whisper'
 								//added 'samples/frame' slider, refer 'fvs_samples_per_frame_factor'
+								//added 'chirp period factor' refer 'fvs_samples_per_frame_factor'
+								//fixed interpolation bug, now wfm is smoother with it on
 #include "ti_lpc.h"
 
 
@@ -41,7 +43,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //refer: http://seanriddle.com/speakandspell.html
 
 
-//mame coeffs
+//mame coeffs`
 //refer: https://github.com/mamedev/mame/blob/master/src/devices/sound/tms5110r.hxx
 
 //description of rom and hardware - good
@@ -193,7 +195,8 @@ float chirp_step;
 Talkie talk;
 bool bperiod_6bits = 0;
 bool b_whisper = 0;
-float fvs_samples_per_frame_factor = 1;
+float fvs_samples_per_frame_factor = 1.0f;
+float fvs_glottal_period_factor = 1.0f;
 
 
 uint8_t *vsm = 0;											//holds a voice synth memory rom 
@@ -2494,15 +2497,33 @@ return;
 
 
 
-
-
 void cb_bt_tms5100_actual()
 {
-string s1;
+string s1, ssin;
+
+/*//put a sine wave in chirp
+vector<float> vsin;
+
+dsp_utils_code::make_sine( 32, 256*196.34954085000032e-3, 1.0, 0.0, 32, vsin );
+
+int8_t i8;
+
+ssin = "chirp=";
+
+for( int i = 0; i < vsin.size(); i++ )
+	{
+	i8 = 127*vsin[i];
+	strpf( s1, "%d, ", (int)i8 );
+	ssin += s1;
+	}
+printf( "cb_bt_tms5100_actual() - ssin  '%s'\n", ssin.c_str() );
+*/
+
 
 //s1 = "chirp_hx=00,2a,d4,32,b2,12,25,14,02,e1,c5,02,5f,5a,05,0f,26,fc,a5,a5,d6,dd,dc,fc,25,2b,22,21,0f,ff,f8,ee,ed,ef,f7,f6,fa,00,03,02,01,00,00,00,00,00,00,00,00,00";
 
 s1 = "processor=tms5100\n";
+//s1 += ssin;
 s1 += "chirp=0, 42, 212, 50, 178, 18, 37, 20, 2, 225, 197, 2, 95, 90, 5, 15, 38, 252, 165, 165, 214, 221, 220, 252, 37, 43, 34, 33, 15, 255, 248, 238, 237, 239, 247, 246, 250, 0, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0";
 s1 += "\n";
 s1 += "energy=0, 0, 1, 1, 2, 3, 5, 7, 10, 15, 21, 30, 43, 61, 86, 0";
@@ -2703,6 +2724,21 @@ say_lpc_str( fi_lpc_hex->value() );
 
 
 
+
+
+
+
+void cb_fvs_glottal_period( Fl_Widget *w, void *v )
+{
+fvs_glottal_period_factor = fvs_glottal_period->value();
+
+if( ( fvs_glottal_period_factor > 0.9 ) && (  fvs_glottal_period_factor < 1.1 ) ) fvs_glottal_period->value( 1.0 );		//make a detent
+printf("cb_fvs_glottal_period() - fvs_glottal_period_factor: %f\n", fvs_glottal_period_factor );
+
+
+say_lpc_str( fi_lpc_hex->value() );
+
+}
 
 
 
@@ -5425,7 +5461,7 @@ uint8_t from_period, cur_period, tgt_period;
 int16_t cur_k0, cur_k1, cur_k2, cur_k3, cur_k4, cur_k5, cur_k6, cur_k7, cur_k8, cur_k9;
 
 
-float interp_mix = 0;							//changes from 0.0->1.0
+//float interp_mix = 0;							//changes from 0.0->1.0
 float impulse_sig;
 
 int energy_idx = 0;
@@ -5599,7 +5635,7 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 			if( bperiod_6bits ) period_idx = getBits(6);					//energy will be 6 bits?
 			else period_idx = getBits(5);
 			
-			tgt_period = tmsPeriod_0280[period_idx];					//pitch, 32 levels
+			tgt_period = fvs_glottal_period_factor * tmsPeriod_0280[period_idx];					//pitch, 32 levels
 //if(vb_dbg)printf("tgt_energy : idx: %02d, val=%03d\n", energy_idx, tgt_energy );
 //if(vb_dbg)printf("tgt_period : idx: %02d, val=%03d\n", period_idx, tgt_period );
 
@@ -5707,8 +5743,6 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 	if( last_silence && ( !now_silence ) ) skip_interp = 1;
 
 
-		printf("here\n");
-
 	float chirp_sub_modulo = 1.0/lpc_srate;
 	float chirp_sub_steps = 1.0/lpc_srate;
 
@@ -5753,18 +5787,18 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 		bool update_interp = 0;
 		
 		//calc interpolation factor
-		if( ( ii != 0 ) & ( !(ii % ( smple_per_frame / interp_granularity )) ) )		//8 times per frame
+		if( ( ii != 0 ) && ( !(ii % ( smple_per_frame / interp_granularity )) ) )		//8 times per frame
 			{
 			update_interp = 1;
 //			cur_k9 = tgt_k9;
-			interp_mix = interp_cur / (interp_granularity - 1.0);	//changes from 0.0->1.0, in 8 steps
+//			interp_mix = interp_cur / (interp_granularity - 1.0);	//changes from 0.0->1.0, in 8 steps
 			interp_cur++;
 			if( interp_cur >= interp_granularity  ) interp_cur = 0;
 			}
 
 
-		if( !use_interp ) interp_mix = 0;
-		if ( skip_interp ) interp_mix = 0;
+//		if( !use_interp ) interp_mix = 0;
+//		if ( skip_interp ) interp_mix = 0;
 
 		if( new_frame ) impulse_sig = 0.4;							//just for checking lattice iir
 
@@ -5905,9 +5939,9 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 
 			update_interp = 0;
 
-			if( use_interp )
+			if( !use_interp )											
 				{
-				cur_energy = from_energy;
+				cur_energy = from_energy;								//interp off ? restore orig vals
 				cur_period = from_period;
 
 				cur_k9 = from_k9;
@@ -5921,6 +5955,9 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 				cur_k1 = from_k1;
 				cur_k0 = from_k0;
 				}
+
+
+
 		//if(vb_dbg)printf("tot: %06d, cnt: %03d, ii_interp: %05d, frme: %03d, energy: %03d, period: %03d, k9:%03d, k8:%03d, k7:%03d, k6:%03d, k5:%03d, k4:%03d, k3:%03d, k2:%03d, k1:%03d, k0:%03d\n", smpl_tot, smpl_cnt, ii, frame_cnt, cur_energy, cur_period, cur_k9, cur_k8, cur_k7, cur_k6, cur_k5, cur_k4, cur_k3, cur_k2, cur_k1, cur_k0 );
 			}
 		else{

@@ -10,7 +10,7 @@ The TMS5100 (aka TMC0280) evolved over the next few years with improvements in s
 
 
 ## How It Produces Speech
-The chirp sound (a brief waveform sample) is looped using a variable period to produce the required pitch, this mimics a vocal chord stimulus (glottis). If a consonant or fricative etc is required then a white noise random number generator is used in place of the chirp. Gain control is applied at this stage. The stimulus is then fed to a lattice filter which simulates the vocal tract. The lattice filter (via applied coefficients) effectively produces a signal which has freq resonances similar to what a vocal tract would impart. The resonances are known as formants (freq peaks), these produce vowel sounds when the chirp stimulus is used. The lattice filter will also shape the consonant/fricative stimulus changing its quality. The output of the lattice filter is then sent to the speaker via a digital to analogue converter and amplifier.
+The chirp sound (a brief waveform sample) is looped using a variable period to produce the required pitch, this mimics a vocal chord stimulus (glottis). If a consonant or fricative etc is required, the chirp is replaced by white noise random number generator. Gain control is applied at this stage. The stimulus is then fed to a lattice filter which simulates the vocal tract. The lattice filter (via applied coefficients) effectively produces a signal which has freq resonances similar to what a vocal tract would impart. The resonances are known as formants (freq peaks), these produce vowel sounds when the chirp stimulus is used. The lattice filter will also shape the consonant/fricative stimulus changing its quality. The output of the lattice filter is then sent to the speaker via a digital to analogue converter and amplifier.
 
 
 ## Code
@@ -90,6 +90,7 @@ The app also generates a: '**zz_audio.au**' sound file after each sounding, the 
 Note: if you set an incorrect 'pc srate' (not matching your current pc's audio hardware samplerate) you will get pitch and duration errors (chipmunk/slo-mo).
 
 Try setting incorrect 'pc srate' and change 'sample/frame' in conjunction with 'whisper' to get some interesting vocalisations.
+Also, try copying a 'chirp=' string into another tmsxxxx chip code table to hear timbre of voice change
 
 Long strings of speech (>20 secs of voicing) will take some time to render and be heard, it may appear the app has locked up, but if you ran app from a command line you will see it's probably still processing audio by the console output. Playing a string that was not meant to be fed into your currently selected tmsxxxx chip may also cause the appearence that the app is locked up.
 

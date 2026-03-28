@@ -67,6 +67,8 @@ Fl_Check_Button *ck_whisper=(Fl_Check_Button *)0;
 
 static Fl_Value_Slider *fvs_smples_frame=(Fl_Value_Slider *)0;
 
+Fl_Value_Slider *fvs_glottal_period=(Fl_Value_Slider *)0;
+
 Fl_Double_Window* main_window() {
   Fl_Double_Window* w;
   { Fl_Double_Window* o = new Fl_Double_Window(990, 970, "ti_lpc_app");
@@ -98,7 +100,7 @@ lect both together");
       fi_romfname->callback((Fl_Callback*)cb_fi_romfname);
       fi_romfname->when(FL_WHEN_CHANGED);
     } // Fl_Input* fi_romfname
-    { fvs_aud_gain = new Fl_Value_Slider(940, 391, 25, 94, "gain");
+    { fvs_aud_gain = new Fl_Value_Slider(940, 454, 25, 94, "gain");
       fvs_aud_gain->tooltip("adj audio level to sound hardware");
       fvs_aud_gain->labelsize(9);
       fvs_aud_gain->minimum(300);
@@ -106,7 +108,7 @@ lect both together");
       fvs_aud_gain->textsize(7);
       fvs_aud_gain->callback((Fl_Callback*)cb_fvs_aud_gain);
     } // Fl_Value_Slider* fvs_aud_gain
-    { te_romaddr = new mytexteditor2(840, 197, 50, 186, " ");
+    { te_romaddr = new mytexteditor2(840, 217, 50, 225, " ");
       te_romaddr->tooltip("lpc addresses from rom (hex), hit Enter button to add to this, right click on\
  an address to render audio");
       te_romaddr->box(FL_DOWN_FRAME);
@@ -119,7 +121,7 @@ lect both together");
       te_romaddr->align(Fl_Align(FL_ALIGN_TOP));
       te_romaddr->when(FL_WHEN_RELEASE);
     } // mytexteditor2* te_romaddr
-    { te_lpcdata = new mytexteditor(245, 203, 595, 180, "LPC hex byte strings");
+    { te_lpcdata = new mytexteditor(245, 223, 595, 219, "LPC hex byte strings");
       te_lpcdata->tooltip("lpc hex byte stream, one stream per line, right click on a line to render aud\
 io, anything before a colon is considered to be a label and is not sounded");
       te_lpcdata->box(FL_DOWN_FRAME);
@@ -132,7 +134,7 @@ io, anything before a colon is considered to be a label and is not sounded");
       te_lpcdata->align(Fl_Align(FL_ALIGN_TOP_LEFT));
       te_lpcdata->when(FL_WHEN_RELEASE);
     } // mytexteditor* te_lpcdata
-    { te_wordlist = new mytexteditor2(5, 203, 240, 180, "Speak Spell\'s Rom Contents (UK/USA)");
+    { te_wordlist = new mytexteditor2(5, 223, 240, 219, "Speak Spell\'s Rom Contents (UK/USA)");
       te_wordlist->tooltip("word lists read from both roms (only valid for Speak & Spell rom pairs), righ\
 t click on an address on the left to render audio");
       te_wordlist->box(FL_DOWN_FRAME);
@@ -145,7 +147,7 @@ t click on an address on the left to render audio");
       te_wordlist->align(Fl_Align(FL_ALIGN_TOP_LEFT));
       te_wordlist->when(FL_WHEN_RELEASE);
     } // mytexteditor2* te_wordlist
-    { te_chirp = new Fl_Text_Editor(5, 413, 910, 222, "tms5xxx code table");
+    { te_chirp = new Fl_Text_Editor(5, 471, 910, 222, "tms5xxx code table");
       te_chirp->tooltip("enter hex byte (or decimal number) strings, one line per param, chirp wfm, en\
 ergy, pitch count, pitch, 10 lattice iir filter(k0-->k9) lookup codes, click o\
 n buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx\
@@ -153,14 +155,14 @@ n buttons at right to see some examples (chirp=10,-5,... for decimal, chirp_hx\
       te_chirp->labelsize(13);
       te_chirp->align(Fl_Align(FL_ALIGN_TOP_LEFT));
     } // Fl_Text_Editor* te_chirp
-    { fi_romaddr = new Fl_Input(840, 176, 50, 20, "addr:");
+    { fi_romaddr = new Fl_Input(840, 196, 50, 20, "addr:");
       fi_romaddr->tooltip("enter a rom address to utter (hex)");
       fi_romaddr->labelsize(11);
       fi_romaddr->textsize(11);
       fi_romaddr->callback((Fl_Callback*)cb_fi_romaddr);
       fi_romaddr->when(FL_WHEN_ENTER_KEY_ALWAYS);
     } // Fl_Input* fi_romaddr
-    { Fl_Button* o = new Fl_Button(937, 95, 50, 20, "AEdit");
+    { Fl_Button* o = new Fl_Button(937, 115, 50, 20, "AEdit");
       o->tooltip("open audio editor, edit script/bat to start your favourite audio editor, see:\
   Linux: \'open_audio_editor.sh\',   Win: \'open_audio_editor.bat\'");
       o->labelsize(11);
@@ -186,25 +188,26 @@ tly set, you will get pitch and duration errors (chipmunk/slomo)");
       fi_srate->callback((Fl_Callback*)cb_fi_srate);
       fi_srate->when(FL_WHEN_ENTER_KEY);
     } // Fl_Value_Input* fi_srate
-    { fluid_gph1 = new Fl_Group(5, 635, 970, 320);
+    { fluid_gph1 = new Fl_Group(5, 696, 970, 270);
+      fluid_gph1->box(FL_THIN_DOWN_BOX);
       fluid_gph1->end();
     } // Fl_Group* fluid_gph1
-    { Fl_Button* o = new Fl_Button(893, 223, 15, 15, "+");
+    { Fl_Button* o = new Fl_Button(893, 273, 15, 15, "+");
       o->tooltip("go up one address and play");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_plus);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(893, 238, 15, 15, "-");
+    { Fl_Button* o = new Fl_Button(893, 288, 15, 15, "-");
       o->tooltip("go down one address and play");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_minus);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(911, 223, 19, 15, "+4");
+    { Fl_Button* o = new Fl_Button(911, 273, 19, 15, "+4");
       o->tooltip("go up 4 addresses and play");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_plus4);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(911, 238, 19, 15, "-4");
+    { Fl_Button* o = new Fl_Button(911, 288, 19, 15, "-4");
       o->tooltip("go down 4 addresses and play");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_minus4);
@@ -222,7 +225,7 @@ o select both together");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_romfile1_sel);
     } // Fl_Button* o
-    { fi_lpc_hex = new Fl_Input(65, 133, 825, 20, "lpc hex:");
+    { fi_lpc_hex = new Fl_Input(65, 153, 825, 20, "lpc hex:");
       fi_lpc_hex->tooltip("lpc hex byte stream (from last rendering), click play on right to re-render a\
 udio");
       fi_lpc_hex->labelsize(11);
@@ -230,7 +233,7 @@ udio");
       fi_lpc_hex->callback((Fl_Callback*)cb_fi_lpc_hex);
       fi_lpc_hex->when(FL_WHEN_CHANGED);
     } // Fl_Input* fi_lpc_hex
-    { Fl_Button* o = new Fl_Button(893, 133, 40, 20, "Play");
+    { Fl_Button* o = new Fl_Button(893, 153, 40, 20, "Play");
       o->tooltip("play lpc hex data");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_play_lpc_hex);
@@ -243,13 +246,13 @@ udio");
       ck_pitch_6bits->callback((Fl_Callback*)cb_ck_pitch_6bits);
       ck_pitch_6bits->deactivate();
     } // Fl_Check_Button* ck_pitch_6bits
-    { fi_srate_au = new Fl_Value_Input(725, 96, 58, 19, "au srate:");
+    { fi_srate_au = new Fl_Value_Input(725, 116, 58, 19, "au srate:");
       fi_srate_au->tooltip("sample rate to use when saving the .au audio file");
       fi_srate_au->labelsize(12);
       fi_srate_au->textsize(11);
       fi_srate_au->callback((Fl_Callback*)cb_fi_srate_au);
     } // Fl_Value_Input* fi_srate_au
-    { fvs_au_aud_gain = new Fl_Value_Slider(785, 95, 150, 21, "au file gain");
+    { fvs_au_aud_gain = new Fl_Value_Slider(785, 115, 150, 21, "au file gain");
       fvs_au_aud_gain->tooltip("set the audio gain when saving to audio file, 100 is unity");
       fvs_au_aud_gain->type(1);
       fvs_au_aud_gain->box(FL_UP_BOX);
@@ -259,25 +262,25 @@ udio");
       fvs_au_aud_gain->textsize(7);
       fvs_au_aud_gain->callback((Fl_Callback*)cb_fvs_au_aud_gain);
     } // Fl_Value_Slider* fvs_au_aud_gain
-    { fi_au_fname = new Fl_Input(66, 96, 560, 20, "au fname:");
+    { fi_au_fname = new Fl_Input(66, 116, 560, 20, "au fname:");
       fi_au_fname->tooltip("enter .au filename to save audio into");
       fi_au_fname->labelsize(11);
       fi_au_fname->textsize(11);
       fi_au_fname->when(FL_WHEN_CHANGED);
     } // Fl_Input* fi_au_fname
-    { Fl_Button* o = new Fl_Button(918, 509, 67, 22, "tms5100");
+    { Fl_Button* o = new Fl_Button(918, 577, 67, 22, "tms5100");
       o->tooltip("select TMS5xxx chip version and its specific codes for: chirp, engery, pitch \
 and lattice iir filter coeffs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_tms5100);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(918, 587, 65, 24, "tms5220");
+    { Fl_Button* o = new Fl_Button(918, 655, 65, 24, "tms5220");
       o->tooltip("select TMS5xxx chip version and its specific codes for: chirp, engery, pitch \
 and lattice iir filter coeffs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_tms5220);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(954, 238, 33, 15, "+last");
+    { Fl_Button* o = new Fl_Button(954, 288, 33, 15, "+last");
       o->tooltip("add last rendered byte count to address and play, this does not work well for\
  words that have text bytes before their lpc byte strings, it\'s not easy to d\
 iscern between text bytes and lpc strings without a table of rom\'s organisati\
@@ -285,13 +288,13 @@ on");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_plus_last);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(918, 561, 65, 23, "tms5200");
+    { Fl_Button* o = new Fl_Button(918, 629, 65, 23, "tms5200");
       o->tooltip("select TMS5xxx chip version and its specific codes for: chirp, engery, pitch \
 and lattice iir filter coeffs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_tms5200);
     } // Fl_Button* o
-    { fi_lpc_decimal = new Fl_Input(65, 153, 825, 20, "lpc decml:");
+    { fi_lpc_decimal = new Fl_Input(65, 173, 825, 20, "lpc decml:");
       fi_lpc_decimal->tooltip("lpc decimal number stream (from last rendering), click play on right to re-re\
 nder audio");
       fi_lpc_decimal->labelsize(11);
@@ -299,61 +302,61 @@ nder audio");
       fi_lpc_decimal->callback((Fl_Callback*)cb_fi_lpc_decimal);
       fi_lpc_decimal->when(FL_WHEN_CHANGED);
     } // Fl_Input* fi_lpc_decimal
-    { Fl_Button* o = new Fl_Button(893, 153, 40, 20, "Play");
+    { Fl_Button* o = new Fl_Button(893, 173, 40, 20, "Play");
       o->tooltip("play lpc decimal data");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_play_lpc_decimal);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(935, 133, 40, 20, "B.File");
+    { Fl_Button* o = new Fl_Button(935, 153, 40, 20, "B.File");
       o->tooltip("play lpc hex data from a binary file");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_play_lpc_file);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(893, 177, 40, 20, "Play");
+    { Fl_Button* o = new Fl_Button(893, 197, 40, 20, "Play");
       o->tooltip("play lpc at address");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_addr_play);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(934, 177, 40, 20, "Enter");
+    { Fl_Button* o = new Fl_Button(934, 197, 40, 20, "Enter");
       o->tooltip("enter address in list");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_addr_enter);
     } // Fl_Button* o
-    { fi_addr_step_delay = new Fl_Input(926, 297, 45, 20, "delay:");
+    { fi_addr_step_delay = new Fl_Input(926, 347, 45, 20, "delay:");
       fi_addr_step_delay->tooltip("delay in secs between auto address stepping, e.g: 0.5");
       fi_addr_step_delay->labelsize(11);
       fi_addr_step_delay->textsize(11);
       fi_addr_step_delay->callback((Fl_Callback*)cb_fi_addr_step_combo, (void*)(1));
       fi_addr_step_delay->when(FL_WHEN_ENTER_KEY_ALWAYS);
     } // Fl_Input* fi_addr_step_delay
-    { fi_addr_step_delta = new Fl_Input(926, 318, 45, 20, "delta:");
+    { fi_addr_step_delta = new Fl_Input(926, 368, 45, 20, "delta:");
       fi_addr_step_delta->tooltip("amount to auto address step by (decimal), e.g: 2    or   -1");
       fi_addr_step_delta->labelsize(11);
       fi_addr_step_delta->textsize(11);
       fi_addr_step_delta->callback((Fl_Callback*)cb_fi_addr_step_combo, (void*)(0));
       fi_addr_step_delta->when(FL_WHEN_ENTER_KEY_ALWAYS);
     } // Fl_Input* fi_addr_step_delta
-    { Fl_Button* o = new Fl_Button(893, 342, 36, 17, "Start");
+    { Fl_Button* o = new Fl_Button(893, 392, 36, 17, "Start");
       o->tooltip("start auto address stepping");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_step_combo, (void*)(0));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(932, 342, 35, 17, "Stop");
+    { Fl_Button* o = new Fl_Button(932, 392, 35, 17, "Stop");
       o->tooltip("stop auto address stepping");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_step_combo, (void*)(1));
     } // Fl_Button* o
-    { fi_addr_step_count = new Fl_Input(932, 361, 45, 20, "count:");
+    { fi_addr_step_count = new Fl_Input(932, 411, 45, 20, "count:");
       fi_addr_step_count->tooltip("count of the number of auto address steps attempted");
       fi_addr_step_count->labelsize(11);
       fi_addr_step_count->textsize(11);
       fi_addr_step_count->callback((Fl_Callback*)cb_fi_addr_step_combo, (void*)(2));
       fi_addr_step_count->when(FL_WHEN_ENTER_KEY_ALWAYS);
     } // Fl_Input* fi_addr_step_count
-    { bx_addr_step_led = new Fl_Box(970, 345, 12, 12);
+    { bx_addr_step_led = new Fl_Box(970, 395, 12, 12);
       bx_addr_step_led->box(FL_BORDER_BOX);
     } // Fl_Box* bx_addr_step_led
-    { fi_addr_snd_end = new Fl_Input(941, 200, 46, 20, "snd end:");
+    { fi_addr_snd_end = new Fl_Input(941, 220, 46, 20, "snd end:");
       fi_addr_snd_end->tooltip("approx end address reached in rom after speech was sounded (in hex), could be\
  out by a few bytes, will show number of bytes parsed (a hex count) if soundin\
 g from a hex string, i.e. not from a rom address");
@@ -361,83 +364,83 @@ g from a hex string, i.e. not from a rom address");
       fi_addr_snd_end->textsize(11);
       fi_addr_snd_end->when(FL_WHEN_ENTER_KEY_ALWAYS);
     } // Fl_Input* fi_addr_snd_end
-    { Fl_Button* o = new Fl_Button(893, 258, 15, 15, "-");
+    { Fl_Button* o = new Fl_Button(893, 308, 15, 15, "-");
       o->tooltip("dec address by defined amount");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_dec_inc_val, (void*)(0));
     } // Fl_Button* o
-    { fi_addr_dec_inc_val = new Fl_Input(911, 255, 44, 20);
+    { fi_addr_dec_inc_val = new Fl_Input(911, 305, 44, 20);
       fi_addr_dec_inc_val->tooltip("enter a value to dec/inc address by (decimal)");
       fi_addr_dec_inc_val->labelsize(11);
       fi_addr_dec_inc_val->textsize(11);
       fi_addr_dec_inc_val->when(FL_WHEN_ENTER_KEY_ALWAYS);
       Fl_Group::current()->resizable(fi_addr_dec_inc_val);
     } // Fl_Input* fi_addr_dec_inc_val
-    { Fl_Button* o = new Fl_Button(958, 258, 15, 15, "+");
+    { Fl_Button* o = new Fl_Button(958, 308, 15, 15, "+");
       o->tooltip("inc address by defined amount");
       o->labelsize(9);
       o->callback((Fl_Callback*)cb_bt_addr_dec_inc_val, (void*)(1));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(933, 223, 19, 15, "+8");
+    { Fl_Button* o = new Fl_Button(933, 273, 19, 15, "+8");
       o->tooltip("go up 8 addresses and play");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_plus8);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(933, 238, 19, 15, "-8");
+    { Fl_Button* o = new Fl_Button(933, 288, 19, 15, "-8");
       o->tooltip("go down 8 addresses and play");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_minus8);
     } // Fl_Button* o
-    { Fl_Box* o = new Fl_Box(905, 281, 70, 15, "Auto Step");
+    { Fl_Box* o = new Fl_Box(905, 256, 70, 15, "Auto Step");
       o->tooltip("Address auto stepping, enter params and hit Start button");
       o->labelsize(9);
     } // Fl_Box* o
-    { Fl_Button* o = new Fl_Button(744, 174, 24, 20, "@<-");
+    { Fl_Button* o = new Fl_Button(744, 194, 24, 20, "@<-");
       o->tooltip("previous address history");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_hist_prev_next, (void*)(0));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(771, 174, 24, 20, "@->");
+    { Fl_Button* o = new Fl_Button(771, 194, 24, 20, "@->");
       o->tooltip("next address history");
       o->labelsize(8);
       o->callback((Fl_Callback*)cb_bt_addr_hist_prev_next, (void*)(1));
     } // Fl_Button* o
-    { bx_addr_hist_label = new Fl_Box(605, 177, 135, 15, "addr history (?\?\?\?/?\?\?\?):");
+    { bx_addr_hist_label = new Fl_Box(605, 197, 135, 15, "addr history (?\?\?\?/?\?\?\?):");
       bx_addr_hist_label->tooltip("Address auto stepping, enter params and hit Start button");
       bx_addr_hist_label->labelsize(11);
     } // Fl_Box* bx_addr_hist_label
-    { Fl_Button* o = new Fl_Button(918, 535, 65, 22, "tms5110");
+    { Fl_Button* o = new Fl_Button(918, 603, 65, 22, "tms5110");
       o->tooltip("select TMS5xxx chip version and its specific codes for: chirp, engery, pitch \
 and lattice iir filter coeffs");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_tms5110);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(377, 182, 45, 20, "Load");
+    { Fl_Button* o = new Fl_Button(377, 202, 45, 20, "Load");
       o->tooltip("load lpc hex byte strings from text file");
       o->labelsize(10);
       o->callback((Fl_Callback*)cb_bt_hex_byte_text_file, (void*)(0));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(425, 182, 45, 20, "Save");
+    { Fl_Button* o = new Fl_Button(425, 202, 45, 20, "Save");
       o->tooltip("save lpc hex byte strings to text file");
       o->labelsize(10);
       o->callback((Fl_Callback*)cb_bt_hex_byte_text_file, (void*)(1));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(147, 391, 45, 20, "Load");
+    { Fl_Button* o = new Fl_Button(147, 449, 45, 20, "Load");
       o->tooltip("load tms code table from text file");
       o->labelsize(10);
       o->callback((Fl_Callback*)cb_bt_tms_code_tables_text_file, (void*)(0));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(195, 391, 45, 20, "Save");
+    { Fl_Button* o = new Fl_Button(195, 449, 45, 20, "Save");
       o->tooltip("save tms code table to text file");
       o->labelsize(10);
       o->callback((Fl_Callback*)cb_bt_tms_code_tables_text_file, (void*)(1));
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(628, 96, 35, 20, "Sel");
+    { Fl_Button* o = new Fl_Button(628, 116, 35, 20, "Sel");
       o->tooltip("select .au audio file");
       o->labelsize(11);
       o->callback((Fl_Callback*)cb_bt_aufile_sel);
     } // Fl_Button* o
-    { Fl_Button* o = new Fl_Button(490, 182, 80, 20, "SanitiseDlg...");
+    { Fl_Button* o = new Fl_Button(490, 202, 80, 20, "SanitiseDlg...");
       o->tooltip("opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup \
 to strip c code symbols, useful if you obtained strings from other code projec\
 ts");
@@ -465,6 +468,20 @@ ts");
       fvs_smples_frame->align(Fl_Align(FL_ALIGN_RIGHT));
       fvs_smples_frame->when(FL_WHEN_RELEASE);
     } // Fl_Value_Slider* fvs_smples_frame
+    { fvs_glottal_period = new Fl_Value_Slider(585, 94, 315, 16, "chirp period factor");
+      fvs_glottal_period->tooltip("glottal chirp period factor, 1.0 is normal, a lower factor increase the numbe\
+r of chirps in a frame and therefore increase pitch");
+      fvs_glottal_period->type(1);
+      fvs_glottal_period->box(FL_UP_BOX);
+      fvs_glottal_period->labelsize(9);
+      fvs_glottal_period->minimum(0.25);
+      fvs_glottal_period->maximum(3);
+      fvs_glottal_period->value(1);
+      fvs_glottal_period->textsize(7);
+      fvs_glottal_period->callback((Fl_Callback*)cb_fvs_glottal_period);
+      fvs_glottal_period->align(Fl_Align(FL_ALIGN_RIGHT));
+      fvs_glottal_period->when(FL_WHEN_RELEASE);
+    } // Fl_Value_Slider* fvs_glottal_period
     o->end();
   } // Fl_Double_Window* o
   tb_lpcdata = new Fl_Text_Buffer;
