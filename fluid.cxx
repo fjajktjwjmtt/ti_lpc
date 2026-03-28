@@ -65,11 +65,14 @@ Fl_Box *bx_addr_hist_label=(Fl_Box *)0;
 
 Fl_Check_Button *ck_whisper=(Fl_Check_Button *)0;
 
+static Fl_Value_Slider *fvs_smples_frame=(Fl_Value_Slider *)0;
+
 Fl_Double_Window* main_window() {
   Fl_Double_Window* w;
   { Fl_Double_Window* o = new Fl_Double_Window(990, 970, "ti_lpc_app");
     w = o; if (w) {/* empty */}
     o->labelsize(11);
+    o->align(Fl_Align(FL_ALIGN_RIGHT));
     { meMain = new Fl_Menu_Bar(0, 0, 990, 20);
     } // Fl_Menu_Bar* meMain
     { Fl_Button* o = new Fl_Button(952, 25, 35, 20, "Sel");
@@ -181,6 +184,7 @@ tly set, you will get pitch and duration errors (chipmunk/slomo)");
       fi_srate->labelsize(11);
       fi_srate->textsize(11);
       fi_srate->callback((Fl_Callback*)cb_fi_srate);
+      fi_srate->when(FL_WHEN_ENTER_KEY);
     } // Fl_Value_Input* fi_srate
     { fluid_gph1 = new Fl_Group(5, 635, 970, 320);
       fluid_gph1->end();
@@ -439,15 +443,28 @@ to strip c code symbols, useful if you obtained strings from other code projec\
 ts");
       o->labelsize(10);
       o->callback((Fl_Callback*)cb_bt_sanitise_dlg, (void*)(1));
-      o->window()->hotspot(o);
     } // Fl_Button* o
-    { ck_whisper = new Fl_Check_Button(550, 75, 65, 15, "whisper");
-      ck_whisper->tooltip("uses white noise, in place of glottal chirp, this feature was not built into \
-the tmsxxxx chip series");
+    { ck_whisper = new Fl_Check_Button(518, 75, 65, 15, "whisper");
+      ck_whisper->tooltip("uses white noise, in place of glottal chirp");
       ck_whisper->down_box(FL_DOWN_BOX);
       ck_whisper->labelsize(11);
       ck_whisper->callback((Fl_Callback*)cb_ck_whisper);
+      ck_whisper->window()->hotspot(ck_whisper);
     } // Fl_Check_Button* ck_whisper
+    { fvs_smples_frame = new Fl_Value_Slider(585, 74, 335, 16, "samples/frame");
+      fvs_smples_frame->tooltip("samples per frame, 1.0 is normal, higher slows voicing allowing frame changes\
+ to be heard, a frame is 25mS,  8KHz * 0.025 = 200 samples/frame");
+      fvs_smples_frame->type(1);
+      fvs_smples_frame->box(FL_UP_BOX);
+      fvs_smples_frame->labelsize(9);
+      fvs_smples_frame->minimum(0.25);
+      fvs_smples_frame->maximum(20);
+      fvs_smples_frame->value(1);
+      fvs_smples_frame->textsize(7);
+      fvs_smples_frame->callback((Fl_Callback*)cb_fvs_smples_frame);
+      fvs_smples_frame->align(Fl_Align(FL_ALIGN_RIGHT));
+      fvs_smples_frame->when(FL_WHEN_RELEASE);
+    } // Fl_Value_Slider* fvs_smples_frame
     o->end();
   } // Fl_Double_Window* o
   tb_lpcdata = new Fl_Text_Buffer;
