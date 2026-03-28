@@ -89,8 +89,8 @@ The app also generates a: '**zz_audio.au**' sound file after each sounding, the 
 
 Note: if you set an incorrect 'pc srate' (not matching your current pc's audio hardware samplerate) you will get pitch and duration errors (chipmunk/slo-mo).
 
-Try setting incorrect 'pc srate' and change 'sample/frame' in conjunction with 'whisper' to get some interesting vocalisations.
-Also, try copying a 'chirp=' string into another tmsxxxx chip code table to hear timbre of voice change
+Try setting incorrect 'pc srate' and change 'sample/frame' in conjunction with 'whisper' to get some interesting vocalisations.</br>
+Also, try copying a 'chirp=' string into another tmsxxxx chip code table to hear timbre of voice change.
 
 Long strings of speech (>20 secs of voicing) will take some time to render and be heard, it may appear the app has locked up, but if you ran app from a command line you will see it's probably still processing audio by the console output. Playing a string that was not meant to be fed into your currently selected tmsxxxx chip may also cause the appearence that the app is locked up.
 
