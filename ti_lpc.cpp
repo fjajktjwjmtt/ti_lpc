@@ -27,10 +27,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.06		22-jul-2023			//moded for namespace 'filter_code::'
 //v1.07		18-sep-2023			//moded for namespace 'gc_srateconv::'
 //v1.08		27-aug-2024			//added .au audio file select dialog via button, refer: 'select_au_file()'  'slast_au_filename'
-//v1.09		27-mar-2026			//added call to newer 'fast_mgraph' function 'fgph.fit_plot(0)'		
+//v1.09		28-mar-2026			//added call to newer 'fast_mgraph' function 'fgph.fit_plot(0)'		
 								//added 'sanitise' button, refer 'cb_bt_sanitise_dlg_actual()'
 								//added 'whisper' checkbox, refer 'b_whisper'
-
+								//added 'samples/frame' slider, refer 'fvs_samples_per_frame_factor'
 #include "ti_lpc.h"
 
 
@@ -193,6 +193,7 @@ float chirp_step;
 Talkie talk;
 bool bperiod_6bits = 0;
 bool b_whisper = 0;
+float fvs_samples_per_frame_factor = 1;
 
 
 uint8_t *vsm = 0;											//holds a voice synth memory rom 
@@ -2688,6 +2689,21 @@ say_lpc_str( fi_lpc_hex->value() );
 
 
 
+void cb_fvs_smples_frame( Fl_Widget *w, void *v )
+{
+fvs_samples_per_frame_factor = fvs_smples_frame->value();
+
+if( ( fvs_samples_per_frame_factor > 0.9 ) && (  fvs_samples_per_frame_factor < 1.1 ) ) fvs_smples_frame->value( 1.0 );		//make a detent
+printf("cb_fvs_smple_frame() - fvs_samples_per_frame_factor: %f\n", fvs_samples_per_frame_factor );
+
+
+say_lpc_str( fi_lpc_hex->value() );
+
+}
+
+
+
+
 
 
 string sanitise_dlg_str;
@@ -2764,7 +2780,6 @@ if( which == 1 )
 	wnd_sanitise_dlg->hide();
 	}
 }
-
 
 
 
@@ -5655,7 +5670,7 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 			}
 		}
 
-	if(vb)printf("frame_cnt[%03d]: engy_idx: %d, engy: %d, period: %d, rpt: %d, ending_cnt: %d\n", frame_cnt, energy_idx, tgt_energy, tgt_period, repeat, ending_cnt );
+//	if(vb)printf("frame_cnt[%03d]: engy_idx: %d, engy: %d, period: %d, rpt: %d, ending_cnt: %d\n", frame_cnt, energy_idx, tgt_energy, tgt_period, repeat, ending_cnt );
 
 	if( first ) 					//first frame?
 		{
@@ -5685,13 +5700,14 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 	if( cur_energy == 0 ) now_silence = 1;
 	else now_silence = 0;
 
-	if( now_voiced & ( !last_voiced ) ) skip_interp = 1;
-	if( last_voiced & ( !now_voiced ) ) skip_interp = 1;
+	if( now_voiced && ( !last_voiced ) ) skip_interp = 1;
+	if( last_voiced && ( !now_voiced ) ) skip_interp = 1;
 
-	if( now_silence & ( !last_silence ) ) skip_interp = 1;
-	if( last_silence & ( !now_silence ) ) skip_interp = 1;
+	if( now_silence && ( !last_silence ) ) skip_interp = 1;
+	if( last_silence && ( !now_silence ) ) skip_interp = 1;
 
 
+		printf("here\n");
 
 	float chirp_sub_modulo = 1.0/lpc_srate;
 	float chirp_sub_steps = 1.0/lpc_srate;
@@ -5707,19 +5723,19 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 	for( int i = 0; i < cn_bufsz; i++ ) buf[ i ] = 0;				//clear buf
 
 
-	double theta1_inc = 400 * twopi / lpc_srate;
+//	double theta1_inc = 400 * twopi / lpc_srate;
 	float sin1;
 	bool new_frame = 1;
 	bool interp_frame = 0;
 	interp_cur = 0;
 	
-	
+	smple_per_frame *= fvs_samples_per_frame_factor;					//if this increase samples per frame the voicing is slowed down
 	for( int ii = 0; ii < smple_per_frame; ii++ )
 		{
-		sin1 = sin( theta1 );
+//		sin1 = sin( theta1 );
 
-		theta1 += theta1_inc;
-		if( theta1 >= twopi ) theta1 -= twopi;
+//		theta1 += theta1_inc;
+//		if( theta1 >= twopi ) theta1 -= twopi;
 
 //		bufsamp0[ ptr ] = sin1;										//store audio samples
 //		bufsamp1[ ptr++ ] = sin1; 
@@ -5991,6 +6007,8 @@ if(1)printf("frame_cnt[%03d] ", frame_cnt );
 	*/
 			}
 
+//printf("cur_k0 %f %f %f %f %f %f %f %f %f %f\n", cur_k0 / mkfract, cur_k1 / mkfract, cur_k2 / mkfract, cur_k3 / mkfract, cur_k4 / mkfract, cur_k5 / mkfract, cur_k6 / mkfract, cur_k7 / mkfract, cur_k8 / mkfract, cur_k9 / mkfract );
+
 		//lattice iir forward path - vocal tract's spectral formant shaper,
 		//approximates sound wave transmission/reflectance through abutted cylinders of various radii 
 		u9 = u10 - ( ( (float)cur_k9 / mkfract) ) * x9;
@@ -6093,7 +6111,7 @@ u0 *= 1.5;
 			phs2 = 0;
 			}
 		tclock++;
-		}
+		}	//end of: for( int ii = 0; ii < smple_per_frame; ii++ )
 
 
 	if( cur_period != 0 ) last_voiced = 1;

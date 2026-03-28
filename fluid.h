@@ -56,6 +56,7 @@ extern Fl_Box *bx_addr_hist_label;
 extern void cb_bt_hex_byte_text_file(Fl_Button*, void*);
 extern void cb_bt_tms_code_tables_text_file(Fl_Button*, void*);
 extern Fl_Check_Button *ck_whisper;
+extern void cb_fvs_smples_frame(Fl_Value_Slider*, void*);
 Fl_Double_Window* main_window();
 void cb_bt_romfile_sel(Fl_Widget*, void*);
 void cb_bt_romfile1_sel(Fl_Widget*, void*);

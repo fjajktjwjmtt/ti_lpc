@@ -36,7 +36,7 @@ Function {main_window()} {open
 } {
   Fl_Window {} {
     label ti_lpc_app open
-    xywh {814 59 990 970} type Double labelsize 11 resizable visible
+    xywh {814 59 990 970} type Double labelsize 11 align 8 resizable visible
   } {
     Fl_Menu_Bar meMain {open
       xywh {0 0 990 20}
@@ -107,10 +107,10 @@ Function {main_window()} {open
     }
     Fl_Value_Input fi_srate {
       label {pc srate:}
-      callback cb_fi_srate
-      tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set, you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 textsize 11
+      callback cb_fi_srate selected
+      tooltip {set this to match the current samplerate of pc's audio hardware, if incorrectly set, you will get pitch and duration errors (chipmunk/slomo)} xywh {445 72 65 20} labelsize 11 when 8 textsize 11
     }
-    Fl_Group fluid_gph1 {open selected
+    Fl_Group fluid_gph1 {open
       xywh {5 635 970 320}
     } {}
     Fl_Button {} {
@@ -337,12 +337,17 @@ Function {main_window()} {open
       label {SanitiseDlg...}
       user_data 1
       callback cb_bt_sanitise_dlg
-      tooltip {opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup to strip c code symbols, useful if you obtained strings from other code projects} xywh {490 182 80 20} labelsize 10 hotspot
+      tooltip {opens Sanitise dialog, paste c code which has byte strings, then hit Cleanup to strip c code symbols, useful if you obtained strings from other code projects} xywh {490 182 80 20} labelsize 10
     }
     Fl_Check_Button ck_whisper {
       label whisper
       callback cb_ck_whisper
-      tooltip {uses white noise, in place of glottal chirp, this feature was not built into the tmsxxxx chip series} xywh {550 75 65 15} down_box DOWN_BOX labelsize 11
+      tooltip {uses white noise, in place of glottal chirp} xywh {518 75 65 15} down_box DOWN_BOX labelsize 11 hotspot
+    }
+    Fl_Value_Slider fvs_smples_frame {
+      label {samples/frame}
+      callback cb_fvs_smples_frame
+      private tooltip {samples per frame, 1.0 is normal, higher slows voicing allowing frame changes to be heard, a frame is 25mS,  8KHz * 0.025 = 200 samples/frame} xywh {585 74 335 16} type Horizontal box UP_BOX labelsize 9 align 8 when 4 minimum 0.25 maximum 20 value 1 textsize 7
     }
   }
   code {tb_lpcdata = new Fl_Text_Buffer;
