@@ -133,9 +133,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.33				13-mar-2026			//added to 'fast_mgraph'  'log_multiplier_x'  'log_multiplier_y'  as in 20  for: 20*log10(y), i.e.   log_multiplier_y * log10(y)
 										//also used 'std::numeric_limits<double>::epsilon()' in place of neg numbers when using: 'use_logx'  'use_logy'
 
-//v1.34				24-mar-2026			//added to 'fast_mgraph' 'plot_spect_discrete_float()' and 'plot_spect_discrete_double()' which does not need fftw
+//v1.34				29-mar-2026			//added to 'fast_mgraph' 'plot_spect_discrete_float()' and 'plot_spect_discrete_double()' which does not need fftw
 										//added to 'fast_mgraph' 'b_show_sel_dB_y' to show dB value of sel sample's y value
 										//added 'namespace dsp_utils_code::make_sine()', it's template based
+										//added 'dsp_utils_code::freqz_fir()'   'dsp_utils_code::freqz_sos_inline()'
 
 #include "mgraph.h"
 
@@ -19136,12 +19137,10 @@ if( trc == -1 )
 /*
 ===============================================================================
 function:
-	bool fft_fwd_real_cplx( vector<float> &vin,
-							vector< complex<float> > &vout,
-							vector<float> &vout_mag,
+	bool plot_spect_discrete_float( 
 							bool b_normalise = 1,
-							bool b_add_neg_spectrum = 1,
-							bool b_human_format = 1 )
+							bool b_show_positive_spect_only = 1 )
+							vector<float> &vin )
 
 purpose:
 	performs a forward discrete fourier transform (dft) of a real signal.
@@ -19161,9 +19160,8 @@ purpose:
 
 -------------------------------------------------------------------------------
 
-default spectrum layout (b_human_format = 0)
+spectrum layout (b_human_format = 0)
 
-vout.size() = N
 
 index		frequency
 -----------------------------------------
@@ -19245,16 +19243,17 @@ example sine amplitude behaviour:
 
 -------------------------------------------------------------------------------
 */
-//does not use fftw, above comment explains where spectra live, note: 'b_human_format = 1' 'b_add_neg_spectrum = 1'
 
-bool fast_mgraph::plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, vector<float> &vin )
+
+//does not use fftw, above comment explains where spectra live, note: 'b_human_format = 1'
+
+bool fast_mgraph::plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, bool b_show_positive_spect_only, vector<float> &vin )
 {
 
 fast_mgraph *gph = this;
 
 vector< complex<float> > vout;
 vector<float> vout_mag;
-bool b_add_neg_spectrum = 1;
 bool b_human_format = 1;
 
 	size_t n = vin.size();
@@ -19309,8 +19308,6 @@ bool b_human_format = 1;
 	/*
 	------------------------------------------------------------
 	human format spectrum (fftshift)
-
-	move negative frequencies to beginning
 	------------------------------------------------------------
 	*/
 	if( b_human_format )
@@ -19341,67 +19338,71 @@ bool b_human_format = 1;
 		vout_mag[k] = sqrtf( re * re + im * im );
 	}
 
+	vector<float> vx0;
+	int cnt = vout_mag.size();
 
-vector<float> vx0;
-int cnt = vout_mag.size();
-
-//build x axis freq vector
-for ( int i = 0; i < cnt; i++ )
+	//build x axis freq vector
+	for ( int i = 0; i < cnt; i++ )
 	{		
-//	float f0 = sqrtf( (float)fftwoc0[i][0]*(float)fftwoc0[i][0] + (float)fftwoc0[i][1]*(float)fftwoc0[i][1] );
-	
-	float bin_bw = srate_in / cnt;
-	vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
-	
-//		vf1.push_back( f0 / cnt );
+		float bin_bw = (float)srate_in / cnt;
+		vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
 	}
 
+	/*
+	------------------------------------------------------------
+	OPTIONAL: show positive spectrum only (DC -> Nyquist)
+	------------------------------------------------------------
+	*/
+	if( b_show_positive_spect_only )
+	{
+		int half = cnt / 2;
 
+		vector<float> vx1;
+		vector<float> vmag1;
 
-//printf("vx size %d   vsp size %d\n", vx0.size(), vsp.size() );
+		float bin_bw = (float)srate_in / cnt;
 
-	string s1 = "plot_spect_discete()";
-	int gph_idx = 0;						//only one graph that has multiple traces
+		for( int i = 0; i < half; i++ )
+		{
+			vx1.push_back( bin_bw * i );          // 0 -> Nyquist
+			vmag1.push_back( vout_mag[i + half] ); // second half
+		}
+
+		vx0.swap( vx1 );
+		vout_mag.swap( vmag1 );
+	}
+
+	string s1 = "plot_spect_discete_float()";
+	int gph_idx = 0;
 	gph->copy_label( s1.c_str() );
 
 	gph->position( 900, 30 );
- 	gph->font_size( 9 );
+	gph->font_size( 9 );
 	gph->set_sig_dig( 2 );
 	gph->sample_rect_hints_distancex = 0;
 	gph->sample_rect_hints_distancey = 0;
 
-//	gph->scale_y( gph_idx, 1.0, 1.0, 1.0, 0.1 );
-//	gph->shift_y( gph_idx, 0.0, 0.0, -0.00, -0.0 );
-
 	gph->shift_y( gph_idx, 0, 0.0f, 0.0f, 0.0f);
-
-//	gph1.yunits_perpxl[0] = -1;
-//	gph->max_defl_y[ 0 ] = 20;
 
 	gph->plotxy_vfloat_1( vx0, vout_mag );
 
 	gph->fit_plot( 0 );
 	
-
-return 1;
+	return 1;
 }
 
 
 
 
-
-
-
-
 //see 'plot_spect_discrete_float()' for description
-bool fast_mgraph::plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, vector<double> &vin )
+bool fast_mgraph::plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, bool b_show_positive_spect_only, vector<double> &vin )
 {
 
 fast_mgraph *gph = this;
 
 vector< complex<double> > vout;
 vector<double> vout_mag;
-bool b_add_neg_spectrum = 1;
+//bool b_add_neg_spectrum = 1;
 bool b_human_format = 1;
 
 	size_t n = vin.size();
@@ -19449,15 +19450,13 @@ bool b_human_format = 1;
 
 		for( size_t k = 0; k < n; k++ )
 		{
-		vout[k] *= scale;
+			vout[k] *= scale;
 		}
 	}
 
 	/*
 	------------------------------------------------------------
 	human format spectrum (fftshift)
-
-	move negative frequencies to beginning
 	------------------------------------------------------------
 	*/
 	if( b_human_format )
@@ -19488,50 +19487,69 @@ bool b_human_format = 1;
 		vout_mag[k] = sqrt( re * re + im * im );
 	}
 
+	vector<double> vx0;
+	int cnt = vout_mag.size();
 
-vector<double> vx0;
-int cnt = vout_mag.size();
-
-//build x axis freq vector
-for ( int i = 0; i < cnt; i++ )
+	//build x axis freq vector
+	for ( int i = 0; i < cnt; i++ )
 	{		
-//	float f0 = sqrtf( (float)fftwoc0[i][0]*(float)fftwoc0[i][0] + (float)fftwoc0[i][1]*(float)fftwoc0[i][1] );
-	
-	float bin_bw = srate_in / cnt;
-	vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
-	
-//		vf1.push_back( f0 / cnt );
+		float bin_bw = (double)srate_in / cnt;
+		vx0.push_back( bin_bw * ( (i + 0) - cnt/2) );	
 	}
 
+	/*
+	------------------------------------------------------------
+	OPTIONAL: show positive spectrum only (DC -> Nyquist)
+	------------------------------------------------------------
+	*/
+	if( b_show_positive_spect_only )
+	{
+		int half = cnt / 2;
 
+		vector<double> vx1;
+		vector<double> vmag1;
 
-//printf("vx size %d   vsp size %d\n", vx0.size(), vsp.size() );
+		double bin_bw = (double)srate_in / cnt;
+
+		for( int i = 0; i < half; i++ )
+		{
+			vx1.push_back( bin_bw * i );             // 0 -> Nyquist
+			vmag1.push_back( vout_mag[i + half] );  // second half
+		}
+
+		vx0.swap( vx1 );
+		vout_mag.swap( vmag1 );
+	}
 
 	string s1 = "plot_spect_discete()";
-	int gph_idx = 0;						//only one graph that has multiple traces
+	int gph_idx = 0;
 	gph->copy_label( s1.c_str() );
 
 	gph->position( 900, 30 );
- 	gph->font_size( 9 );
+	gph->font_size( 9 );
 	gph->set_sig_dig( 2 );
 	gph->sample_rect_hints_distancex = 0;
 	gph->sample_rect_hints_distancey = 0;
 
-//	gph->scale_y( gph_idx, 1.0, 1.0, 1.0, 0.1 );
-//	gph->shift_y( gph_idx, 0.0, 0.0, -0.00, -0.0 );
-
 	gph->shift_y( gph_idx, 0, 0.0f, 0.0f, 0.0f);
-
-//	gph1.yunits_perpxl[0] = -1;
-//	gph->max_defl_y[ 0 ] = 20;
 
 	gph->plotxy_vdouble_1( vx0, vout_mag );
 
 	gph->fit_plot( 0 );
 	
-
-return 1;
+	return 1;
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

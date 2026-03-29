@@ -1523,8 +1523,9 @@ bool set_left_click_cb( void (*p_cb)( void* ), void *args_in );
 bool set_middle_click_cb( void (*p_cb)( void* ), void *args_in );
 bool set_right_click_cb( void (*p_cb)( void* ), void *args_in );
 bool tick_range_y_build( unsigned int trc, unsigned int which_range, bool verbose );
-bool plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, vector<float> &vin );
-bool plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, vector<double> &vin );
+bool plot_spect_discrete_float( unsigned int srate_in, bool b_normalise, bool b_show_positive_spect_only, vector<float> &vin );
+bool plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, bool b_show_positive_spect_only, vector<double> &vin );
+//bool plot_spect_discrete_double( unsigned int srate_in, bool b_normalise, vector<double> &vin );
 
 private:
 int handle( int e );
@@ -1564,6 +1565,179 @@ for( int i = 0; i < cnt; i++ )
 	if( theta0 < 0.0 ) theta0 += twopi;
 	}
 }
+
+
+
+
+
+
+
+//analyse an fir response
+template< typename T >
+void freqz_fir(
+    vector<T> &vcoeff,
+    unsigned int num_points,
+    vector<T> &vomega,
+    vector<T> &vamp
+)
+{
+
+    const unsigned int ntaps = vcoeff.size();
+
+    vomega.resize(num_points);
+    vamp.resize(num_points);
+
+    for(unsigned int k = 0; k < num_points; k++)
+    {
+
+        T omega = (T)pi * (T)k / (T)(num_points - 1);
+
+        vomega[k] = omega;
+
+        T re = (T)0;
+        T im = (T)0;
+
+        for(unsigned int n = 0; n < ntaps; n++)
+        {
+
+            T phase = -omega * (T)n;
+
+            T c = (T)cos((double)phase);
+            T s = (T)sin((double)phase);
+
+            re += vcoeff[n] * c;
+            im += vcoeff[n] * s;
+
+        }
+
+        vamp[k] = (T)sqrt((double)(re*re + im*im));
+
+    }
+
+}
+
+
+
+//analyse an iir response
+template< typename T >
+int freqz_sos_inline(
+    vector<T> &vnumer,   // [b0,b1,b2, b0,b1,b2, ...]
+    vector<T> &vdenom,   // [1,a1,a2, 1,a1,a2, ...]
+    unsigned int num_points,
+    vector<T> &vomega,
+    vector<T> &vamp
+)
+{
+
+    // size checks
+    if(vnumer.size() == 0 || vdenom.size() == 0)
+        return 0;
+
+    if((vnumer.size() % 3) != 0)
+        return 0;
+
+    if((vdenom.size() % 3) != 0)
+        return 0;
+
+    if(vnumer.size() != vdenom.size())
+        return 0;
+
+    const unsigned int nsec = vnumer.size() / 3;
+
+    vomega.resize(num_points);
+    vamp.resize(num_points);
+
+    for(unsigned int k = 0; k < num_points; k++)
+    {
+
+        T omega = (T)pi * (T)k / (T)(num_points - 1);
+
+        vomega[k] = omega;
+
+        // total response
+        T re_h = (T)1;
+        T im_h = (T)0;
+
+        for(unsigned int s = 0; s < nsec; s++)
+        {
+
+            unsigned int idx = s * 3;
+
+            // numerator coeffs
+            T b0 = vnumer[idx + 0];
+            T b1 = vnumer[idx + 1];
+            T b2 = vnumer[idx + 2];
+
+            // denominator coeffs
+            T a0 = vdenom[idx + 0];   // should be 1
+            T a1 = vdenom[idx + 1];
+            T a2 = vdenom[idx + 2];
+
+            // evaluate numerator
+            T re_b = (T)0;
+            T im_b = (T)0;
+
+            for(unsigned int n = 0; n < 3; n++)
+            {
+
+                T phase = -omega * (T)n;
+
+                T c = (T)cos((double)phase);
+                T s_ = (T)sin((double)phase);
+
+                if(n == 0) { re_b += b0 * c; im_b += b0 * s_; }
+                if(n == 1) { re_b += b1 * c; im_b += b1 * s_; }
+                if(n == 2) { re_b += b2 * c; im_b += b2 * s_; }
+
+            }
+
+            // evaluate denominator
+            T re_a = (T)0;
+            T im_a = (T)0;
+
+            for(unsigned int n = 0; n < 3; n++)
+            {
+
+                T phase = -omega * (T)n;
+
+                T c = (T)cos((double)phase);
+                T s_ = (T)sin((double)phase);
+
+                if(n == 0) { re_a += a0 * c; im_a += a0 * s_; }
+                if(n == 1) { re_a += a1 * c; im_a += a1 * s_; }
+                if(n == 2) { re_a += a2 * c; im_a += a2 * s_; }
+
+            }
+
+            // divide
+            T denom_mag2 = re_a*re_a + im_a*im_a;
+
+            if(denom_mag2 < (T)1e-20)
+            {
+                denom_mag2 = (T)1e-20;
+            }
+
+            T re_sec = (re_b*re_a + im_b*im_a) / denom_mag2;
+            T im_sec = (im_b*re_a - re_b*im_a) / denom_mag2;
+
+            // accumulate
+            T re_tmp = re_h*re_sec - im_h*im_sec;
+            T im_tmp = re_h*im_sec + im_h*re_sec;
+
+            re_h = re_tmp;
+            im_h = im_tmp;
+
+        }
+
+        vamp[k] = (T)sqrt((double)(re_h*re_h + im_h*im_h));
+
+    }
+
+    return 1;
+
+}
+
+
 
 }	//namespace dsp_utils
 //-------------------------------------------------------------------------------

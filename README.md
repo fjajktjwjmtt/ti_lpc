@@ -22,7 +22,7 @@ You will find many lpc strings in that project to try, they are within c code fi
 
 The app makes use of information from MAME project and the toil of numerous archivists(hackers), visit the mame site to see some amazing preservation coding.</br>
 
-Where pieces of code or ideas are originate from other people, the comments in source code will give links to who or where it came from.</br>
+Where pieces of code or ideas originate from other people or projects, there will be comments/links in source code to who or where it came from.</br>
 
 
 ## Further Information

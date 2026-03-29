@@ -1151,7 +1151,7 @@ col.b = 0;
 //led_trace_col_wfm1->ChangeCol( 0 );
 
 
-printf("gph0_scaley0: %f\n", gph0_scaley0);
+//printf("gph0_scaley0: %f\n", gph0_scaley0);
 
 tr1.id = 0;                      //identify which trace this is, helps when traces are push_back'd in unknown order
 tr1.vis = 1;
