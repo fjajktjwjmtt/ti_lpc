@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2019-2026 BrerDawg, et. al.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,8 +17,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 //audio_formats.h
-//v1.05	---- 05-jun-2017
-//v1.08
+//-----v1.05 05-jun-2017
+//-----v1.08 23-feb-2019
+//-----v1.09 27-mar-2026 	//fixed: 'bits_per_sample' in st_audio_formats_tag changed from 'bool' to 'unsigned int'
+								//was causing WAV header to always write 1-bit instead of 8 or 16
 
 //!! see usage examples in 'audio_formats.cpp'
    
@@ -231,7 +233,7 @@ unsigned int channels;
 unsigned int offset;
 
 bool is_big_endian;
-bool bits_per_sample;
+unsigned int bits_per_sample;
 
 vector<double> vch0;
 vector<double> vch1;

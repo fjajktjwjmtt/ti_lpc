@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2024 BrerDawg
+Copyright (C) 2019-2026 BrerDawg, et. al.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 //ti_lpc_cmd.h
 
-//v1.01
+//-----v1.01 31-jan-2024 	//initial cmd line version header
+//-----v1.02 27-mar-2026 	//updated: copyright to 'Copyright (C) 2019-2026 BrerDawg, et. al.'
 
 
 #ifndef ti_lpc_cmd_h

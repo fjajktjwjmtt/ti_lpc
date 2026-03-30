@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2019 BrerDawg
+Copyright (C) 2019-2026 BrerDawg, et. al.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -33,6 +33,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //v1.06	---- 15-jul-2018				//minor mod to: 'audio_formats.h' for 64 bit 
 //v1.07	---- 05-sep-2018				//added fp methods , see rem'd out code EXAMPLE: 'test_audio_format_fp()'
 //v1.08	---- 23-feb-2019				//in 'logpf()'	-- changed 'delete buf;'  to 'delete[] buf;'  -- discovered with valgrind,
+//v1.09	---- 27-mar-2026				//moded save_wav_malloc() to support 8-bit and 16-bit output via af.bits_per_sample
+										//8-bit WAV uses unsigned samples centered at 128, 16-bit uses signed little-endian
+										//WAV header fields (data_chunk_cksize, avg_bytes_per_sec, block_align, bits_per_samp)
+										//now derived from bytes_per_samp instead of hardcoded to 16-bit
 										//also see load_malloc() v1.08, where pch0, pch1 a freed and then realloc
 
 #include "audio_formats.h"
@@ -6289,7 +6293,9 @@ if( buf == 0 )
 strncpy( (char*)(buf + cn_riff_hdr_ckid), "RIFF", 4 );
 
 
-unsigned int data_chunk_cksize = cnt0 * 2;						//size of all the audio sample data in bytes
+int bytes_per_samp = ( af.bits_per_sample == 8 ) ? 1 : 2;
+
+unsigned int data_chunk_cksize = cnt0 * bytes_per_samp;						//size of all the audio sample data in bytes
 unsigned int tot_chunk_size = data_chunk_cksize + 36;			//this number is 4 less than the total wav filesize
 
 
@@ -6322,18 +6328,19 @@ strncpy( (char*)( buf + 12 + cn_riff_fmt_chunk_ckid ), "fmt ", 4 );            /
 
 
 
-unsigned int avg_bytes_per_sec = af.srate * channels * 2;
+unsigned int avg_bytes_per_sec = af.srate * channels * bytes_per_samp;
 *(unsigned int*)( buf + 12 + cn_riff_fmt_chunk_avg_bytes_per_sec ) = avg_bytes_per_sec;
 
 
 
 
-*(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_block_align ) = (unsigned char)( channels * 2 );		//1 channel = 2, 2 channel = 4
+*(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_block_align ) = (unsigned char)( channels * bytes_per_samp );		//1ch 8bit=1, 1ch 16bit=2, 2ch 16bit=4
 *(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_block_align + 1 ) = 0;
 
 
-*(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_bits_per_samp ) = 16;
+*(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_bits_per_samp ) = af.bits_per_sample;
 *(unsigned char*)( buf + 12 + cn_riff_fmt_chunk_bits_per_samp + 1 ) = 0;
+
 
 
 
@@ -6373,11 +6380,22 @@ for( int i = 0; i < cnt0; i++ )
 	else  dd = pch1[ k ];
 
 	iaud = nearbyint( dd * (double)peak_int_val );	//v1.04
-    
-    buf[ j ] = iaud & 0xff;                    	    //little endian
-    j++;
-    buf[ j ] = ( iaud >> 8  ) & 0xff;
-    j++;
+
+	if( bytes_per_samp == 1 )
+		{
+		//8-bit wav samples are unsigned, center at 128
+		int samp8 = iaud + 128;
+		if( samp8 < 0 ) samp8 = 0;
+		if( samp8 > 255 ) samp8 = 255;
+		buf[ j ] = (unsigned char)samp8;
+		j++;
+		}
+	else{
+		buf[ j ] = iaud & 0xff;                    	    //little endian 16-bit signed
+		j++;
+		buf[ j ] = ( iaud >> 8  ) & 0xff;
+		j++;
+		}
 
 	if( j >= cn_audio_formats_buf_siz )
 		{
