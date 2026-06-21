@@ -1,9 +1,9 @@
-name: MSYS2 Auto Build
+name: MinGW64 Auto Build
 
 on:
   push:
-    branches: [ "main", "master" ] # あなたのリポジトリのメインブランチ名に合わせてください
-  workflow_dispatch: # ボタンを押して手動で実行したい場合用
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -13,29 +13,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ② MSYS2環境を構築し、libXtなどの依存パッケージを入れる
-      - name: Setup MSYS2
+      # ② MINGW64環境を構築し、FLTK 1.3、RtAudio、libXt を一括インストール
+      - name: Setup MSYS2 (MinGW64)
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MSYS    # ← ここをMSYSに指定（MinGWではなくMSYS環境用）
+          msystem: MINGW64
           update: true
           install: >-
-            base-devel
-            gcc
-            libXt-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-libXt
+            mingw-w64-x86_64-fltk1.3
+            mingw-w64-x86_64-rtaudio
 
-      # ③ MSYS2のシェル上でコンパイルを実行
+      # ③ MINGW64のシェル上でビルドを実行
       - name: Compile Source
         shell: msys2 {0}
         run: |
-          # ※ここのビルドコマンドは、プロジェクトのビルド方法に合わせて書き換えてください。
-          Makefileがある場合 -> make
-       
-      
+          # 🚨 プロジェクトのビルド方法に合わせて、以下の「いずれか1つ」を選んで書き換えてください。
+          
+          # 【パターンA】 Makefile がある場合（一番多いケース）
+          make
+          
+          # 【パターンB】 CMake を使う場合
+          # cmake -B build -G "MinGW Makefiles"
+          # cmake --build build
+          
+          # 【パターンC】 gcc コマンドを直接たたく場合（例）
+          # gcc main.cpp -o my_app.exe -lfltk -lrtaudio -lXt
 
-      # ④ ビルドした .exe をブラウザからダウンロードできるように保存する
+      # ④ ビルドした成果物を保存（※出力されたexeのファイル名に合わせて path を変更してください）
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: msys2-windows-exe   # ダウンロードするときのファイル名（任意）
-          path: my_app.exe          # 上のステップで出力されたexeのパスを指定
+          name: windows-application
+          path: |
+            *.exe
+            build/*.exe
