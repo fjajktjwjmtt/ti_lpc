@@ -13,11 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ② MINGW64環境を構築し、FLTK1.3 と RtAudio をインストール
-      - name: Setup MSYS2 (MinGW64)
+      # ② UCRT64環境を構築し、FLTK1.3 と RtAudio をインストール
+      - name: Setup MSYS2 (UCRT64)
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           # エラーの出た libXt を削り、安定して取得できるパッケージのみに絞りました
           install: >-
@@ -25,14 +25,10 @@ jobs:
             mingw-w64-x86_64-fltk1.3
             mingw-w64-x86_64-rtaudio
 
-      # ③ MINGW64のシェル上でビルドを実行
+      # ③ UCRT64のシェル上でビルドを実行
       - name: Compile Source
         shell: msys2 {0}
-        run: |
-          pacman -S --noconfirm mingw-w64-x86_64-make
-          which make
-          make --version
-          make
+        run: make
 
       # ④ ビルドした成果物を保存
       - name: Upload Artifact
