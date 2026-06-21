@@ -31,6 +31,7 @@ jobs:
         run: |
           # 🚨 プロジェクトに合わせてコマンドを有効にしてください。
           # Makefile がある場合は、下の「make」のままで進みます。
+          sudo apt-get update && sudo apt-get install -y make
           make
 
       # ④ ビルドした成果物を保存
