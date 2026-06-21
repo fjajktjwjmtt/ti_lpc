@@ -17,14 +17,16 @@ jobs:
         with:
           msystem: UCRT64
           update: true
+          # パッケージ名を x86_64 から ucrt-x86_64 に修正
           install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-fltk1.3
-            mingw-w64-x86_64-rtaudio
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-fltk
+            mingw-w64-ucrt-x86_64-rtaudio
 
       - name: Compile Source
         shell: msys2 {0}
-        run: mingw32-make
+        # mingw32-make から make に変更（もし Makefile 側で mingw32-make が必須なら、ここはそのままにしてください）
+        run: make
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -33,4 +35,3 @@ jobs:
           path: |
             *.exe
             build/*.exe
-
