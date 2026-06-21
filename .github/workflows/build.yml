@@ -30,7 +30,9 @@ jobs:
         shell: msys2 {0}
         run: |
           export PATH="/mingw64/bin:$PATH"
-          make
+                 
+           which make
+           /mingw64/bin/make.exe
 
       # ④ ビルドした成果物を保存
       - name: Upload Artifact
