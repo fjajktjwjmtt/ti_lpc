@@ -29,9 +29,7 @@ jobs:
       - name: Compile Source
         shell: msys2 {0}
         run: |
-          # 🚨 プロジェクトに合わせてコマンドを有効にしてください。
-          # Makefile がある場合は、下の「make」のままで進みます。
-          pacman -S --noconfirm mingw-w64-x86_64-make
+          export PATH="/mingw64/bin:$PATH"
           make
 
       # ④ ビルドした成果物を保存
