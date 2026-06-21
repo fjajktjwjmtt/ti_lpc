@@ -1,4 +1,4 @@
-Name: MinGW64 Auto Build
+name: MinGW64 Auto Build
 
 on:
   push:
