@@ -1,0 +1,41 @@
+name: MSYS2 Auto Build
+
+on:
+  push:
+    branches: [ "main", "master" ] # あなたのリポジトリのメインブランチ名に合わせてください
+  workflow_dispatch: # ボタンを押して手動で実行したい場合用
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      # ① コードをWindowsサーバーに持ってくる
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ② MSYS2環境を構築し、libXtなどの依存パッケージを入れる
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS    # ← ここをMSYSに指定（MinGWではなくMSYS環境用）
+          update: true
+          install: >-
+            base-devel
+            gcc
+            libXt-devel
+
+      # ③ MSYS2のシェル上でコンパイルを実行
+      - name: Compile Source
+        shell: msys2 {0}
+        run: |
+          # ※ここのビルドコマンドは、プロジェクトのビルド方法に合わせて書き換えてください。
+          Makefileがある場合 -> make
+       
+      
+
+      # ④ ビルドした .exe をブラウザからダウンロードできるように保存する
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: msys2-windows-exe   # ダウンロードするときのファイル名（任意）
+          path: my_app.exe          # 上のステップで出力されたexeのパスを指定
