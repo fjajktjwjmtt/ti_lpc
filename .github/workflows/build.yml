@@ -33,3 +33,4 @@ jobs:
           path: |
             *.exe
             build/*.exe
+
