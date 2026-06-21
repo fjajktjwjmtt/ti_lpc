@@ -22,14 +22,15 @@ jobs:
           # エラーの出た libXt を削り、安定して取得できるパッケージのみに絞りました
           install: >-
             mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-make
             mingw-w64-x86_64-fltk1.3
             mingw-w64-x86_64-rtaudio
 
       # ③ MINGW64のシェル上でビルドを実行
       - name: Compile Source
         shell: msys2 {0}
-        run: make
+        run: |
+          pacman -S --noconfirm mingw-w64-x86_64-make
+          /mingw64/bin/make.exe
 
       # ④ ビルドした成果物を保存
       - name: Upload Artifact
