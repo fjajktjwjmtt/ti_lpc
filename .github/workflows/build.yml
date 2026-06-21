@@ -26,9 +26,11 @@ jobs:
             mingw-w64-x86_64-rtaudio
 
       # ③ UCRT64のシェル上でビルドを実行
-      - name: Compile Source
-        shell: msys2 {0}
-        run: make
+      -   run: echo "C:\msys64\usr\bin" >> $GITHUB_PATH
+  shell: bash
+  name: Compile Source
+  shell: msys2 {0}
+  run: make
 
       # ④ ビルドした成果物を保存
       - name: Upload Artifact
