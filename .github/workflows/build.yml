@@ -1,4 +1,4 @@
-name: MinGW64 Auto Build
+Name: MinGW64 Auto Build
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
             mingw-w64-x86_64-fltk1.3
             mingw-w64-x86_64-rtaudio
 
-            - name: Compile Source
+      - name: Compile Source
         shell: msys2 {0}
         run: mingw32-make
 
