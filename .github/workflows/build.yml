@@ -21,7 +21,7 @@ jobs:
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-fltk
             mingw-w64-ucrt-x86_64-rtaudio
-
+            mingw-w64-ucrt-x86_64-rtmidi
       - name: Compile Source
         shell: msys2 {0}
         # インストールが成功したので、このコマンドが正しく動くようになります
