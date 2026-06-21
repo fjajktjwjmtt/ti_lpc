@@ -22,9 +22,9 @@ jobs:
             mingw-w64-x86_64-fltk1.3
             mingw-w64-x86_64-rtaudio
 
-      - name: Compile Source
+            - name: Compile Source
         shell: msys2 {0}
-        run: make
+        run: mingw32-make
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
