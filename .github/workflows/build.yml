@@ -31,7 +31,7 @@ jobs:
         run: |
           # 🚨 プロジェクトに合わせてコマンドを有効にしてください。
           # Makefile がある場合は、下の「make」のままで進みます。
-          choco install make
+          pacman -S --noconfirm mingw-w64-x86_64-make
           make
 
       # ④ ビルドした成果物を保存
