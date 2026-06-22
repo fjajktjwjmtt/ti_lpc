@@ -39,16 +39,23 @@ jobs:
     # 3. C++の規格を固定し、型衝突を回避してビルド
     # 3. std::byte の定義を強制無効化し、型衝突を完全に回避してビルド
         # 3. std::byte の定義を強制無効化し、型衝突を完全に回避してビルド
+    # 3. 各種ソースコードの型不足・マクロ衝突を自動修正してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
-        # 1. winsockマクロとの衝突を避けるための変数名置換
+        # 1. ti_lpc.cpp: winsockマクロとの衝突を避けるための変数名置換
         sed -i 's/\bs_addr\b/s_rom_addr/g' ti_lpc.cpp
         
-        # 2. GCLed.cpp に不足している FLTK のヘッダーを自動で追加
+        # 2. GCLed.cpp: 不足している FLTK のヘッダーを自動追加
         sed -i '1i#include <FL/Fl_Group.H>' GCLed.cpp
         
-        # 3. _HAS_STD_BYTE=0 フラグを注入してビルド実行（規格は標準に戻します）
+        # 3. gc_rtaudio.h: uint16_t 等の型定義に必要な標準ヘッダーを自動追加
+        sed -i '1i#include <cstdint>' gc_rtaudio.h
+        
+        # 4. gc_rtaudio.cpp: 新しいコンパイラでパースエラーになるキャスト文法の修正
+        sed -i 's/(struct\s\*st_rtaud_arg_tag)/(st_rtaud_arg_tag\*)/g' gc_rtaudio.cpp
+        
+        # 5. _HAS_STD_BYTE=0 と permissive フラグを注入してビルド実行
         make CXXFLAGS="-O3 -D_HAS_STD_BYTE=0 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
 
 
