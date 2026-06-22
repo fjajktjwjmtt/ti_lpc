@@ -37,6 +37,7 @@ jobs:
     # 3. Windowsの予約語（s_addr）を自動置換した上で、マクロフラグを渡してビルド
     # 3. 不足しているヘッダーの自動追加、および各種衝突回避フラグを渡してビルド
     # 3. C++の規格を固定し、型衝突を回避してビルド
+    # 3. std::byte の定義を強制無効化し、型衝突を完全に回避してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
@@ -46,8 +47,8 @@ jobs:
         # 2. GCLed.cpp に不足している FLTK のヘッダーを自動で追加
         sed -i '1i#include <FL/Fl_Group.H>' GCLed.cpp
         
-        # 3. C++規格を C++14 (-std=gnu++14) に固定してビルド実行
-        make CXXFLAGS="-O3 -std=gnu++14 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
+        # 3. _HAS_STD_BYTE=0 フラグを注入してビルド実行（規格は標準に戻します）
+        make CXXFLAGS="-O3 -D_HAS_STD_BYTE=0 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
 
 
 
