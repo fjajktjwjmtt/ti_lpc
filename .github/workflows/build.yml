@@ -34,10 +34,15 @@ jobs:
     # 3. エラーの原因となる厳密な型チェック（narrowing）のみを無効化してビルド
     # 3. Windows向けのマクロ定義を明示し、かつ型チェックエラーを回避してビルド
     # 3. Windows環境の衝突回避マクロ、ビルド日、および64bitポインタキャストを許可してビルド
+    # 3. Windowsの予約語（s_addr）を自動置換した上で、マクロフラグを渡してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
-        make CXXFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -D__USE_W32_SOCKETS -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -D__USE_W32_SOCKETS -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
+        # エラーの原因となる変数名を別の名前に自動置換
+        sed -i 's/\bs_addr\b/s_rom_addr/g' ti_lpc.cpp
+        
+        # ビルドの実行
+        make CXXFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
 
 
 
