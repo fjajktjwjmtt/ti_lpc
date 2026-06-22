@@ -35,13 +35,17 @@ jobs:
     # 3. Windows向けのマクロ定義を明示し、かつ型チェックエラーを回避してビルド
     # 3. Windows環境の衝突回避マクロ、ビルド日、および64bitポインタキャストを許可してビルド
     # 3. Windowsの予約語（s_addr）を自動置換した上で、マクロフラグを渡してビルド
+    # 3. 不足しているヘッダーの自動追加、および各種衝突回避フラグを渡してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
-        # エラーの原因となる変数名を別の名前に自動置換
+        # 1. winsockマクロとの衝突を避けるための変数名置換
         sed -i 's/\bs_addr\b/s_rom_addr/g' ti_lpc.cpp
         
-        # ビルドの実行
+        # 2. GCLed.cpp に不足している FLTK のヘッダーを自動で追加
+        sed -i '1i#include <FL/Fl_Group.H>' GCLed.cpp
+        
+        # 3. ビルドの実行
         make CXXFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing -Dbuild_date=\"\\\"2026_Jun_22\\\"\" -fpermissive" OUT=ti_lpc.exe
 
 
