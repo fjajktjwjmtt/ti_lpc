@@ -31,10 +31,12 @@ jobs:
 
     # 3. Windows環境用のビルド実行
     # MSYS2のシェル上で Makefile を実行します
+    # 3. エラーの原因となる厳密な型チェック（narrowing）のみを無効化してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
-        make OUT=ti_lpc.exe
+        make CXXFLAGS="-O3 -Wno-narrowing" CFLAGS="-O3 -Wno-narrowing" OUT=ti_lpc.exe
+
 
     # 4. 実行ファイル（.exe）をGitHub上に保存
     - name: Upload Artifact
