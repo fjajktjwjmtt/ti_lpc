@@ -1,36 +1,44 @@
-name: MinGW64 Auto Build
+name: Build Windows Executable (Native)
 
 on:
   push:
     branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # 1. ソースコードのチェックアウト
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup MSYS2 (UCRT64)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-fltk
-            mingw-w64-ucrt-x86_64-rtaudio
-            mingw-w64-ucrt-x86_64-rtmidi
-      - name: Compile Source
-        shell: msys2 {0}
-        # インストールが成功したので、このコマンドが正しく動くようになります
-        run: mingw32-make
+    # 2. MSYS2環境のセットアップ（MinGW-w64ツールチェーンとライブラリをまとめて導入）
+    - name: Setup MSYS2 and Install Dependencies
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-fltk
+          mingw-w64-x86_64-rtaudio
+          mingw-w64-x86_64-rtmidi
+          make
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-application
-          path: |
-            *.exe
-            build/*.exe
+    # 3. Windows環境用のビルド実行
+    # MSYS2のシェル上で Makefile を実行します
+    - name: Build with Make
+      shell: msys2 {0}
+      run: |
+        make OUT=ti_lpc.exe
+
+    # 4. 実行ファイル（.exe）をGitHub上に保存
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ti_lpc-windows-x64
+        path: ti_lpc.exe
