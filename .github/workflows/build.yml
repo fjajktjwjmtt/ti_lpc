@@ -32,10 +32,12 @@ jobs:
     # 3. Windows環境用のビルド実行
     # MSYS2のシェル上で Makefile を実行します
     # 3. エラーの原因となる厳密な型チェック（narrowing）のみを無効化してビルド
+    # 3. Windows向けのマクロ定義を明示し、かつ型チェックエラーを回避してビルド
     - name: Build with Make
       shell: msys2 {0}
       run: |
-        make CXXFLAGS="-O3 -Wno-narrowing" CFLAGS="-O3 -Wno-narrowing" OUT=ti_lpc.exe
+        make CXXFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing" CFLAGS="-O3 -DWIN32 -Dcompile_for_windows -Wno-narrowing" OUT=ti_lpc.exe
+
 
 
     # 4. 実行ファイル（.exe）をGitHub上に保存
